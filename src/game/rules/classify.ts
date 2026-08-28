@@ -124,6 +124,59 @@ function classifySequence(cards: CardData[], level: PlainRank, requireFlush: boo
   });
 }
 
+function classifyTripleWithPair(cards: CardData[], level: PlainRank): PlayInterpretation[] {
+  const wildcards = cards.filter((card) => isWildcard(card, level));
+  const fixedCards = cards.filter((card) => !isWildcard(card, level));
+
+  if (fixedCards.some((card) => !isPlainRank(card.rank))) {
+    return [];
+  }
+
+  const fixedCounts = new Map<PlainRank, number>();
+  fixedCards.forEach((card) => {
+    const rank = card.rank as PlainRank;
+    fixedCounts.set(rank, (fixedCounts.get(rank) ?? 0) + 1);
+  });
+
+  return PLAIN_RANKS_ASCENDING.flatMap((tripleRank) =>
+    PLAIN_RANKS_ASCENDING.flatMap((pairRank) => {
+      if (pairRank === tripleRank) {
+        return [];
+      }
+
+      const targetCounts = new Map<PlainRank, number>([
+        [tripleRank, 3],
+        [pairRank, 2],
+      ]);
+      const fixedCardsFit = [...fixedCounts.entries()].every(
+        ([rank, count]) => count <= (targetCounts.get(rank) ?? 0),
+      );
+      if (!fixedCardsFit) {
+        return [];
+      }
+
+      const missingRanks = [
+        ...Array.from({ length: 3 - (fixedCounts.get(tripleRank) ?? 0) }, () => tripleRank),
+        ...Array.from({ length: 2 - (fixedCounts.get(pairRank) ?? 0) }, () => pairRank),
+      ];
+      if (missingRanks.length !== wildcards.length) {
+        return [];
+      }
+
+      return [{
+        kind: 'triple-with-pair',
+        cards,
+        primaryRank: tripleRank,
+        primaryStrength: getRankStrength(tripleRank, level),
+        cardCount: 5,
+        bombTier: 0,
+        wildcardAssignments: assignWildcards(wildcards, missingRanks),
+        description: `三张 ${tripleRank} 带 ${pairRank} 对`,
+      } satisfies PlayInterpretation];
+    }),
+  );
+}
+
 function classifyFourJokers(cards: CardData[]): PlayInterpretation[] {
   if (cards.length !== 4) {
     return [];
@@ -196,6 +249,7 @@ export function classifyPlay(cards: CardData[], level: PlainRank): PlayInterpret
     interpretations.push(...classifySameRank(cards, level, 'bomb'));
   }
   if (cards.length === 5) {
+    interpretations.push(...classifyTripleWithPair(cards, level));
     interpretations.push(...classifySequence(cards, level, false));
     interpretations.push(...classifySequence(cards, level, true));
   }

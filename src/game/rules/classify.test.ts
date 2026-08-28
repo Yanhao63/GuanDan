@@ -101,6 +101,43 @@ describe('classifyPlay', () => {
     expect(fourJokers[0].kind).toBe('four-jokers');
   });
 
+  it('recognizes a triple with a pair only when their ranks differ', () => {
+    const valid = classifyPlay([
+      card('A', 'spades', 1),
+      card('A', 'spades', 2),
+      card('A', 'clubs'),
+      card('K', 'spades'),
+      card('K', 'clubs'),
+    ], '7').filter((play) => play.kind === 'triple-with-pair');
+    const fiveOfAKind = classifyPlay([
+      card('A', 'spades', 1),
+      card('A', 'spades', 2),
+      card('A', 'clubs'),
+      card('A', 'diamonds'),
+      card('7', 'hearts'),
+    ], '7');
+
+    expect(valid).toHaveLength(1);
+    expect(valid[0]).toMatchObject({ primaryRank: 'A', description: '三张 A 带 K 对' });
+    expect(fiveOfAKind.filter((play) => play.kind === 'triple-with-pair')).toHaveLength(0);
+    expect(fiveOfAKind.some((play) => play.kind === 'bomb')).toBe(true);
+  });
+
+  it('returns both legal triple-with-pair meanings when two wildcards make them possible', () => {
+    const interpretations = classifyPlay([
+      card('A', 'spades', 1),
+      card('A', 'clubs', 2),
+      card('K', 'diamonds'),
+      card('7', 'hearts', 1),
+      card('7', 'hearts', 2),
+    ], '7').filter((play) => play.kind === 'triple-with-pair');
+
+    expect(interpretations.map((play) => play.description)).toEqual([
+      '三张 K 带 A 对',
+      '三张 A 带 K 对',
+    ]);
+  });
+
   it('rejects duplicate physical card ids', () => {
     const duplicate = card('A', 'spades');
     expect(classifyPlay([duplicate, duplicate], '7')).toHaveLength(0);
