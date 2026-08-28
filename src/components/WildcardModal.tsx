@@ -1,26 +1,39 @@
+import type { PlayInterpretation, WildcardAssignment } from '../game/rules/types';
+
 interface WildcardModalProps {
   onCancel: () => void;
-  onConfirm: (choice: string) => void;
+  onConfirm: (choice: PlayInterpretation) => void;
+  options: PlayInterpretation[];
 }
 
-const choices = [
-  { title: '同花顺 10-J-Q-K-A', detail: '两张红桃 2 分别作为黑桃 K、黑桃 A' },
-  { title: '同花顺 8-9-10-J-Q', detail: '两张红桃 2 分别作为黑桃 8、黑桃 9' },
-];
+const suitNames = {
+  spades: '黑桃',
+  hearts: '红桃',
+  clubs: '梅花',
+  diamonds: '方块',
+} as const;
 
-export function WildcardModal({ onCancel, onConfirm }: WildcardModalProps) {
+function describeAssignment(assignment: WildcardAssignment): string {
+  const suit = assignment.represents.suit;
+  return `红桃级牌作为${suit === undefined ? '' : suitNames[suit]} ${assignment.represents.rank}`;
+}
+
+export function WildcardModal({ onCancel, onConfirm, options }: WildcardModalProps) {
   return (
     <div className="modal-backdrop" role="presentation">
       <section aria-labelledby="wildcard-title" aria-modal="true" className="game-modal" role="dialog">
         <div className="modal-crest" aria-hidden="true">♥</div>
         <p className="eyebrow">红桃级牌 · 百搭</p>
         <h2 id="wildcard-title">请选择这手牌的解释</h2>
-        <p className="modal-description">两张红桃 2 与黑桃 10、J、Q 可以组成两种同花顺。请选择本次出牌的确切含义。</p>
+        <p className="modal-description">这组牌存在多种合法解释。请选择本次出牌的确切含义。</p>
         <div className="wildcard-options">
-          {choices.map((choice) => (
-            <button key={choice.title} onClick={() => onConfirm(choice.title)} type="button">
+          {options.map((choice) => (
+            <button key={choice.description} onClick={() => onConfirm(choice)} type="button">
               <span className="radio-mark" />
-              <span><strong>{choice.title}</strong><small>{choice.detail}</small></span>
+              <span>
+                <strong>{choice.description}</strong>
+                <small>{choice.wildcardAssignments.map(describeAssignment).join('；')}</small>
+              </span>
             </button>
           ))}
         </div>

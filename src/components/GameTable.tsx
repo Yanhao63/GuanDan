@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { demoHand, sortDemoHand } from '../game/demoCards';
+import { classifyPlay } from '../game/rules/classify';
+import type { PlayInterpretation } from '../game/rules/types';
 import type { CardData, TimerChoice } from '../game/types';
 import { Icon } from '../ui/Icon';
 import { PlayerSeat } from './PlayerSeat';
@@ -19,6 +21,7 @@ export function GameTable({ nickname, roomCode, timer }: GameTableProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showChat, setShowChat] = useState(false);
   const [showWildcard, setShowWildcard] = useState(false);
+  const [wildcardOptions, setWildcardOptions] = useState<PlayInterpretation[]>([]);
   const [tableMessage, setTableMessage] = useState('等待上家出牌');
   const [speech, setSpeech] = useState<string | null>(null);
   const [playedCards, setPlayedCards] = useState<CardData[]>([]);
@@ -32,30 +35,29 @@ export function GameTable({ nickname, roomCode, timer }: GameTableProps) {
     setSelectedIds((current) => current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId]);
   };
 
-  const commitPlay = (wildcardChoice?: string) => {
+  const commitPlay = (wildcardChoice?: PlayInterpretation) => {
     setPlayedCards(selectedCards);
     setHand((current) => current.filter((card) => !selectedIds.includes(card.id)));
     setSelectedIds([]);
     setShowWildcard(false);
-    setTableMessage(wildcardChoice === undefined ? '已出牌 · 等待下家' : `已按“${wildcardChoice}”出牌`);
+    setWildcardOptions([]);
+    setTableMessage(wildcardChoice === undefined ? '已出牌 · 等待下家' : `已按“${wildcardChoice.description}”出牌`);
   };
 
   const handlePlay = () => {
-    const wildCards = selectedCards.filter((card) => card.rank === '2' && card.suit === 'hearts');
-    const hasStraightFlushCore = ['10', 'J', 'Q'].every((rank) =>
-      selectedCards.some((card) => card.rank === rank && card.suit === 'spades'),
-    );
-    const isWildcardDemo = selectedCards.length === 5 && wildCards.length === 2 && hasStraightFlushCore;
+    const interpretations = classifyPlay(selectedCards, '2');
+    const straightFlushOptions = interpretations.filter((play) => play.kind === 'straight-flush');
 
-    if (isWildcardDemo) {
+    if (straightFlushOptions.length > 1) {
+      setWildcardOptions(straightFlushOptions);
       setShowWildcard(true);
       return;
     }
-    if (wildCards.length > 0) {
-      setTableMessage('百搭演示：请选择两张红桃 2 与黑桃 10、J、Q');
+    if (interpretations.length === 0) {
+      setTableMessage('所选手牌暂未识别为合法牌型');
       return;
     }
-    commitPlay();
+    commitPlay(interpretations[0]);
   };
 
   const sendMessage = (message: string) => {
@@ -115,7 +117,13 @@ export function GameTable({ nickname, roomCode, timer }: GameTableProps) {
       </div>
 
       {showChat ? <QuickChatDrawer onClose={() => setShowChat(false)} onSend={sendMessage} /> : null}
-      {showWildcard ? <WildcardModal onCancel={() => setShowWildcard(false)} onConfirm={commitPlay} /> : null}
+      {showWildcard ? (
+        <WildcardModal
+          onCancel={() => setShowWildcard(false)}
+          onConfirm={commitPlay}
+          options={wildcardOptions}
+        />
+      ) : null}
     </main>
   );
 }
