@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { demoHand, sortDemoHand } from '../game/demoCards';
+import { sortDemoHand } from '../game/demoCards';
 import { classifyPlay } from '../game/rules/classify';
+import type { RoomPlayerView, RoomView } from '../game/room';
+import type { Seat } from '../game/rules/match';
 import type { PlayInterpretation } from '../game/rules/types';
-import type { CardData, TimerChoice } from '../game/types';
 import { Icon } from '../ui/Icon';
 import { PlayerSeat } from './PlayerSeat';
 import { PokerCard } from './PokerCard';
@@ -11,20 +12,45 @@ import { TopHud } from './TopHud';
 import { WildcardModal } from './WildcardModal';
 
 interface GameTableProps {
-  nickname: string;
-  roomCode: string;
-  timer: TimerChoice;
+  notice?: string;
+  onPass: () => void;
+  onPlay: (cardIds: string[], description: string) => void;
+  onQuickMessage: (message: string) => void;
+  view: RoomView;
 }
 
-export function GameTable({ nickname, roomCode, timer }: GameTableProps) {
-  const [hand, setHand] = useState<CardData[]>(() => sortDemoHand(demoHand, '2'));
+function relativeSeat(selfSeat: Seat, offset: 1 | 2 | 3): Seat {
+  return ((selfSeat + offset) % 4) as Seat;
+}
+
+function playerAt(view: RoomView, seat: Seat): RoomPlayerView {
+  const player = view.players.find((candidate) => candidate.seat === seat);
+  if (player === undefined) {
+    throw new Error('牌局座位数据不完整');
+  }
+  return player;
+}
+
+export function GameTable({ notice = '', onPass, onPlay, onQuickMessage, view }: GameTableProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showChat, setShowChat] = useState(false);
   const [showWildcard, setShowWildcard] = useState(false);
   const [wildcardOptions, setWildcardOptions] = useState<PlayInterpretation[]>([]);
-  const [tableMessage, setTableMessage] = useState('等待上家出牌');
+  const [localMessage, setLocalMessage] = useState('');
   const [speech, setSpeech] = useState<string | null>(null);
-  const [playedCards, setPlayedCards] = useState<CardData[]>([]);
+
+  const hand = useMemo(() => sortDemoHand(view.hand, view.level), [view.hand, view.level]);
+  const topPlayer = playerAt(view, relativeSeat(view.selfSeat, 2));
+  const leftPlayer = playerAt(view, relativeSeat(view.selfSeat, 3));
+  const rightPlayer = playerAt(view, relativeSeat(view.selfSeat, 1));
+  const selfPlayer = playerAt(view, view.selfSeat);
+  const isSelfTurn = view.currentSeat === view.selfSeat;
+  const tableMessage = notice.length > 0
+    ? notice
+    : localMessage.length > 0
+      ? localMessage
+      : view.lastPlay?.description ?? '等待首出';
+  const playedCards = view.lastPlay?.cards ?? [];
 
   const selectedCards = useMemo(
     () => hand.filter((card) => selectedIds.includes(card.id)),
@@ -36,25 +62,27 @@ export function GameTable({ nickname, roomCode, timer }: GameTableProps) {
   };
 
   const commitPlay = (wildcardChoice?: PlayInterpretation) => {
-    setPlayedCards(selectedCards);
-    setHand((current) => current.filter((card) => !selectedIds.includes(card.id)));
+    const choice = wildcardChoice ?? wildcardOptions[0];
+    if (choice === undefined) {
+      return;
+    }
+    onPlay(selectedIds, choice.description);
     setSelectedIds([]);
     setShowWildcard(false);
     setWildcardOptions([]);
-    setTableMessage(wildcardChoice === undefined ? '已出牌 · 等待下家' : `已按“${wildcardChoice.description}”出牌`);
+    setLocalMessage('');
   };
 
   const handlePlay = () => {
     const interpretations = classifyPlay(selectedCards, '2');
-    const straightFlushOptions = interpretations.filter((play) => play.kind === 'straight-flush');
 
-    if (straightFlushOptions.length > 1) {
-      setWildcardOptions(straightFlushOptions);
+    if (interpretations.length > 1) {
+      setWildcardOptions(interpretations);
       setShowWildcard(true);
       return;
     }
     if (interpretations.length === 0) {
-      setTableMessage('所选手牌暂未识别为合法牌型');
+      setLocalMessage('所选手牌不是合法牌型');
       return;
     }
     commitPlay(interpretations[0]);
@@ -63,16 +91,17 @@ export function GameTable({ nickname, roomCode, timer }: GameTableProps) {
   const sendMessage = (message: string) => {
     setSpeech(message);
     setShowChat(false);
+    onQuickMessage(message);
   };
 
   return (
     <main className="game-screen">
-      <TopHud roomCode={roomCode} timerLabel={timer} />
+      <TopHud level={view.level} roomCode={view.roomCode} timerLabel={view.timer} />
 
       <div className="table-canvas">
-        <PlayerSeat isTeammate name="松风机器人" position="top" status="与你同队" />
-        <PlayerSeat cardCount={9} name="竹影机器人" position="left" status="剩余牌已公开" />
-        <PlayerSeat isActive name="临江机器人" position="right" status="正在思考" />
+        <PlayerSeat cardCount={topPlayer.cardCount ?? undefined} isActive={view.currentSeat === topPlayer.seat} isTeammate name={topPlayer.nickname} position="top" status={topPlayer.connected ? '与你同队' : '等待重连'} />
+        <PlayerSeat cardCount={leftPlayer.cardCount ?? undefined} isActive={view.currentSeat === leftPlayer.seat} name={leftPlayer.nickname} position="left" status={leftPlayer.connected ? '牌局进行中' : '等待重连'} />
+        <PlayerSeat cardCount={rightPlayer.cardCount ?? undefined} isActive={view.currentSeat === rightPlayer.seat} name={rightPlayer.nickname} position="right" status={rightPlayer.connected ? '牌局进行中' : '等待重连'} />
 
         <div className="table-center">
           <div className="round-state">
@@ -93,18 +122,18 @@ export function GameTable({ nickname, roomCode, timer }: GameTableProps) {
         <section className="self-area">
           {speech !== null ? <div className="speech-bubble">{speech}</div> : null}
           <div className="self-status">
-            <div className="self-avatar">{nickname.slice(0, 1)}</div>
-            <div><strong>{nickname}</strong><span>本家 · 房主</span></div>
+            <div className="self-avatar">{selfPlayer.nickname.slice(0, 1)}</div>
+            <div><strong>{selfPlayer.nickname}</strong><span>{selfPlayer.isHost ? '本家 · 房主' : '本家'}</span></div>
             <span className="hand-count">{hand.length} 张</span>
           </div>
 
           <div className="action-bar">
-            <button className="button button-secondary action-small" onClick={() => setSelectedIds([])} type="button">不要</button>
-            <button className="button button-secondary action-small" onClick={() => setTableMessage('提示：可尝试从较小的单张开始')} type="button">提示</button>
-            <button className="button button-primary play-button" disabled={selectedIds.length === 0} onClick={handlePlay} type="button">
+            <button className="button button-secondary action-small" disabled={!isSelfTurn || view.lastPlay === null} onClick={() => { setSelectedIds([]); onPass(); }} type="button">不要</button>
+            <button className="button button-secondary action-small" onClick={() => setLocalMessage('提示：优先选择能合法压过牌面的较小组合')} type="button">提示</button>
+            <button className="button button-primary play-button" disabled={!isSelfTurn || selectedIds.length === 0} onClick={handlePlay} type="button">
               出牌{selectedIds.length > 0 ? ` · ${selectedIds.length} 张` : ''}
             </button>
-            <button aria-label="整理手牌" className="round-action" onClick={() => setHand((current) => sortDemoHand(current, '2'))} type="button"><Icon name="sort" /></button>
+            <button aria-label="整理手牌" className="round-action" onClick={() => setSelectedIds([])} type="button"><Icon name="sort" /></button>
             <button aria-label="快捷语和表情" className="round-action" onClick={() => setShowChat(true)} type="button"><Icon name="chat" /></button>
           </div>
 

@@ -1,5 +1,14 @@
 import type { CardData, Rank } from '../types';
-import { FIVE_CARD_SEQUENCES, PLAIN_RANKS_ASCENDING, getBombTier, getRankStrength, isPlainRank } from './ranks';
+import {
+  CONSECUTIVE_PAIR_SEQUENCES,
+  FIVE_CARD_SEQUENCES,
+  PLAIN_RANKS_ASCENDING,
+  STEEL_PLATE_SEQUENCES,
+  getBombTier,
+  getRankStrength,
+  isPlainRank,
+  type SequencePattern,
+} from './ranks';
 import type { PlainRank, PlainSuit, PlayInterpretation, WildcardAssignment } from './types';
 
 function isWildcard(card: CardData, level: PlainRank): boolean {
@@ -177,6 +186,54 @@ function classifyTripleWithPair(cards: CardData[], level: PlainRank): PlayInterp
   );
 }
 
+function classifyMultiplicitySequence(
+  cards: CardData[],
+  level: PlainRank,
+  patterns: SequencePattern[],
+  copiesPerRank: 2 | 3,
+  kind: 'consecutive-pairs' | 'steel-plate',
+): PlayInterpretation[] {
+  const wildcards = cards.filter((card) => isWildcard(card, level));
+  const fixedCards = cards.filter((card) => !isWildcard(card, level));
+
+  if (fixedCards.some((card) => !isPlainRank(card.rank))) {
+    return [];
+  }
+
+  const fixedCounts = new Map<PlainRank, number>();
+  fixedCards.forEach((card) => {
+    const rank = card.rank as PlainRank;
+    fixedCounts.set(rank, (fixedCounts.get(rank) ?? 0) + 1);
+  });
+
+  return patterns.flatMap((pattern) => {
+    const fixedCardsFit = [...fixedCounts.entries()].every(
+      ([rank, count]) => pattern.ranks.includes(rank) && count <= copiesPerRank,
+    );
+    if (!fixedCardsFit) {
+      return [];
+    }
+
+    const missingRanks = pattern.ranks.flatMap((rank) =>
+      Array.from({ length: copiesPerRank - (fixedCounts.get(rank) ?? 0) }, () => rank),
+    );
+    if (missingRanks.length !== wildcards.length) {
+      return [];
+    }
+
+    return [{
+      kind,
+      cards,
+      primaryRank: pattern.ranks[pattern.ranks.length - 1],
+      primaryStrength: pattern.strength,
+      cardCount: cards.length,
+      bombTier: 0,
+      wildcardAssignments: assignWildcards(wildcards, missingRanks),
+      description: `${kind === 'consecutive-pairs' ? '三连对' : '钢板'} ${pattern.label}`,
+    } satisfies PlayInterpretation];
+  });
+}
+
 function classifyFourJokers(cards: CardData[]): PlayInterpretation[] {
   if (cards.length !== 4) {
     return [];
@@ -250,8 +307,28 @@ export function classifyPlay(cards: CardData[], level: PlainRank): PlayInterpret
   }
   if (cards.length === 5) {
     interpretations.push(...classifyTripleWithPair(cards, level));
-    interpretations.push(...classifySequence(cards, level, false));
-    interpretations.push(...classifySequence(cards, level, true));
+    const straightFlushes = classifySequence(cards, level, true);
+    if (straightFlushes.length > 0) {
+      interpretations.push(...straightFlushes);
+    } else {
+      interpretations.push(...classifySequence(cards, level, false));
+    }
+  }
+  if (cards.length === 6) {
+    interpretations.push(...classifyMultiplicitySequence(
+      cards,
+      level,
+      CONSECUTIVE_PAIR_SEQUENCES,
+      2,
+      'consecutive-pairs',
+    ));
+    interpretations.push(...classifyMultiplicitySequence(
+      cards,
+      level,
+      STEEL_PLATE_SEQUENCES,
+      3,
+      'steel-plate',
+    ));
   }
 
   return deduplicateInterpretations(interpretations);

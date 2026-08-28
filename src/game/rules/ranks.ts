@@ -36,6 +36,37 @@ export const FIVE_CARD_SEQUENCES: SequencePattern[] = [
   { ranks: ['10', 'J', 'Q', 'K', 'A'], strength: 9, label: '10-J-Q-K-A' },
 ];
 
+export const CONSECUTIVE_PAIR_SEQUENCES: SequencePattern[] = [
+  { ranks: ['A', '2', '3'], strength: 0, label: 'A-2-3' },
+  { ranks: ['2', '3', '4'], strength: 1, label: '2-3-4' },
+  { ranks: ['3', '4', '5'], strength: 2, label: '3-4-5' },
+  { ranks: ['4', '5', '6'], strength: 3, label: '4-5-6' },
+  { ranks: ['5', '6', '7'], strength: 4, label: '5-6-7' },
+  { ranks: ['6', '7', '8'], strength: 5, label: '6-7-8' },
+  { ranks: ['7', '8', '9'], strength: 6, label: '7-8-9' },
+  { ranks: ['8', '9', '10'], strength: 7, label: '8-9-10' },
+  { ranks: ['9', '10', 'J'], strength: 8, label: '9-10-J' },
+  { ranks: ['10', 'J', 'Q'], strength: 9, label: '10-J-Q' },
+  { ranks: ['J', 'Q', 'K'], strength: 10, label: 'J-Q-K' },
+  { ranks: ['Q', 'K', 'A'], strength: 11, label: 'Q-K-A' },
+];
+
+export const STEEL_PLATE_SEQUENCES: SequencePattern[] = [
+  { ranks: ['A', '2'], strength: 0, label: 'A-2' },
+  { ranks: ['2', '3'], strength: 1, label: '2-3' },
+  { ranks: ['3', '4'], strength: 2, label: '3-4' },
+  { ranks: ['4', '5'], strength: 3, label: '4-5' },
+  { ranks: ['5', '6'], strength: 4, label: '5-6' },
+  { ranks: ['6', '7'], strength: 5, label: '6-7' },
+  { ranks: ['7', '8'], strength: 6, label: '7-8' },
+  { ranks: ['8', '9'], strength: 7, label: '8-9' },
+  { ranks: ['9', '10'], strength: 8, label: '9-10' },
+  { ranks: ['10', 'J'], strength: 9, label: '10-J' },
+  { ranks: ['J', 'Q'], strength: 10, label: 'J-Q' },
+  { ranks: ['Q', 'K'], strength: 11, label: 'Q-K' },
+  { ranks: ['K', 'A'], strength: 12, label: 'K-A' },
+];
+
 export function isPlainRank(rank: Rank): rank is PlainRank {
   return rank !== '小王' && rank !== '大王';
 }

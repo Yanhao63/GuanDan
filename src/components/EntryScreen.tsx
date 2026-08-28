@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { BrandMark } from './BrandMark';
 
 interface EntryScreenProps {
+  busy?: boolean;
+  errorMessage?: string;
   onCreateRoom: (nickname: string) => void;
   onJoinRoom: (nickname: string, roomCode: string) => void;
 }
 
-export function EntryScreen({ onCreateRoom, onJoinRoom }: EntryScreenProps) {
+export function EntryScreen({ busy = false, errorMessage = '', onCreateRoom, onJoinRoom }: EntryScreenProps) {
   const [nickname, setNickname] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [message, setMessage] = useState('');
@@ -59,8 +61,8 @@ export function EntryScreen({ onCreateRoom, onJoinRoom }: EntryScreenProps) {
           value={nickname}
         />
 
-        <button className="button button-primary button-wide" onClick={handleCreate} type="button">
-          创建房间
+        <button className="button button-primary button-wide" disabled={busy} onClick={handleCreate} type="button">
+          {busy ? '正在连接…' : '创建房间'}
         </button>
 
         <div className="entry-divider"><span>或加入朋友的牌桌</span></div>
@@ -78,11 +80,11 @@ export function EntryScreen({ onCreateRoom, onJoinRoom }: EntryScreenProps) {
             placeholder="6 位房间号"
             value={roomCode}
           />
-          <button className="button button-secondary" onClick={handleJoin} type="button">加入房间</button>
+          <button className="button button-secondary" disabled={busy} onClick={handleJoin} type="button">加入房间</button>
         </div>
 
-        <p aria-live="polite" className={message.length > 0 ? 'form-message form-message-visible' : 'form-message'}>
-          {message.length > 0 ? message : '无需账号，浏览器会安全保存你的重连信息'}
+        <p aria-live="polite" className={message.length > 0 || errorMessage.length > 0 ? 'form-message form-message-visible' : 'form-message'}>
+          {message.length > 0 ? message : errorMessage.length > 0 ? errorMessage : '无需账号，浏览器会安全保存你的重连信息'}
         </p>
       </section>
     </main>

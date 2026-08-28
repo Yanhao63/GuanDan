@@ -1,79 +1,151 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { EntryScreen } from './components/EntryScreen';
 import { GameTable } from './components/GameTable';
 import { LobbyScreen } from './components/LobbyScreen';
+import {
+  connectRoom,
+  createRoom,
+  type LiveRoomConnection,
+  type OutgoingMessage,
+} from './game/network';
+import type { JoinReceipt, RoomView } from './game/room';
+import type { Seat } from './game/rules/match';
 import type { RoomPlayer, TimerChoice } from './game/types';
 
-type Screen = 'entry' | 'lobby' | 'game';
+function reconnectStorageKey(roomCode: string): string {
+  return `guandan-reconnect:${roomCode}`;
+}
 
-const makeHost = (nickname: string): RoomPlayer => ({
-  id: 'local-player',
-  nickname,
-  kind: 'human',
-  isHost: true,
-  isReady: true,
-  seat: 0,
-});
-
-const botNames = ['临江机器人', '松风机器人', '竹影机器人'];
+function getSavedReconnectCode(roomCode: string, nickname: string): string | undefined {
+  const saved = localStorage.getItem(reconnectStorageKey(roomCode));
+  if (saved === null) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(saved) as { nickname?: string; reconnectCode?: string };
+    return parsed.nickname === nickname ? parsed.reconnectCode : undefined;
+  } catch {
+    localStorage.removeItem(reconnectStorageKey(roomCode));
+    return undefined;
+  }
+}
 
 export function App() {
-  const [screen, setScreen] = useState<Screen>('entry');
-  const [nickname, setNickname] = useState('');
-  const [roomCode, setRoomCode] = useState('482731');
-  const [timer, setTimer] = useState<TimerChoice>('不限时');
-  const [players, setPlayers] = useState<Array<RoomPlayer | null>>([null, null, null, null]);
+  const connectionRef = useRef<LiveRoomConnection | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [view, setView] = useState<RoomView | null>(null);
 
-  const enterLobby = (nextNickname: string, nextRoomCode: string) => {
-    setNickname(nextNickname);
-    setRoomCode(nextRoomCode);
-    setPlayers([makeHost(nextNickname), null, null, null]);
-    setScreen('lobby');
-  };
+  useEffect(() => () => connectionRef.current?.close(), []);
 
-  const addBot = (seat: 0 | 1 | 2 | 3) => {
-    setPlayers((current) => current.map((player, index) => {
-      if (index !== seat || player !== null) {
-        return player;
-      }
-      return {
-        id: `bot-${seat}`,
-        nickname: botNames[Math.max(0, seat - 1)],
-        kind: 'bot',
-        isHost: false,
+  const players = useMemo<Array<RoomPlayer | null>>(() => {
+    if (view === null) {
+      return [null, null, null, null];
+    }
+    return ([0, 1, 2, 3] as Seat[]).map((seat) => {
+      const player = view.players.find((candidate) => candidate.seat === seat);
+      return player === undefined ? null : {
+        id: `${player.kind}-${seat}`,
+        isHost: player.isHost,
         isReady: true,
+        kind: player.kind,
+        nickname: player.nickname,
         seat,
       };
-    }));
+    });
+  }, [view]);
+
+  const openConnection = async (nickname: string, roomCode: string, reconnect?: string) => {
+    setBusy(true);
+    setMessage('');
+    connectionRef.current?.close();
+    try {
+      const connection = await connectRoom({
+        nickname,
+        onError: setMessage,
+        onJoined: (receipt: JoinReceipt, initialView: RoomView) => {
+          localStorage.setItem(reconnectStorageKey(roomCode), JSON.stringify({
+            nickname,
+            reconnectCode: receipt.reconnectCode,
+          }));
+          setView(initialView);
+          setMessage('');
+        },
+        onState: (nextView) => {
+          setView(nextView);
+          setMessage('');
+        },
+        reconnect,
+        roomCode,
+      });
+      connectionRef.current = connection;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '无法连接到牌桌');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const removeBot = (seat: 0 | 1 | 2 | 3) => {
-    setPlayers((current) => current.map((player, index) => index === seat && player?.kind === 'bot' ? null : player));
+  const handleCreateRoom = (nickname: string) => {
+    void (async () => {
+      setBusy(true);
+      setMessage('');
+      try {
+        const roomCode = await createRoom();
+        await openConnection(nickname, roomCode);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : '无法创建房间');
+        setBusy(false);
+      }
+    })();
   };
 
-  if (screen === 'entry') {
+  const handleJoinRoom = (nickname: string, roomCode: string) => {
+    void openConnection(nickname, roomCode, getSavedReconnectCode(roomCode, nickname));
+  };
+
+  if (view === null) {
     return (
       <EntryScreen
-        onCreateRoom={(nextNickname) => enterLobby(nextNickname, '482731')}
-        onJoinRoom={enterLobby}
+        busy={busy}
+        errorMessage={message}
+        onCreateRoom={handleCreateRoom}
+        onJoinRoom={handleJoinRoom}
       />
     );
   }
 
-  if (screen === 'lobby') {
+  const send = (payload: OutgoingMessage) => {
+    try {
+      connectionRef.current?.send(payload);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : '操作发送失败');
+    }
+  };
+
+  if (view.phase === 'lobby') {
+    const self = view.players.find((player) => player.seat === view.selfSeat);
     return (
       <LobbyScreen
-        nickname={nickname}
-        onAddBot={addBot}
-        onRemoveBot={removeBot}
-        onStart={() => setScreen('game')}
-        onTimerChange={setTimer}
+        nickname={self?.nickname ?? '玩家'}
+        onAddBot={(seat) => send({ seat, type: 'add-bot' })}
+        onRemoveBot={(seat) => send({ seat, type: 'remove-bot' })}
+        onStart={() => send({ type: 'start' })}
+        onTimerChange={(timer: TimerChoice) => send({ timer, type: 'set-timer' })}
         players={players}
-        roomCode={roomCode}
-        timer={timer}
+        roomCode={view.roomCode}
+        timer={view.timer}
       />
     );
   }
 
-  return <GameTable nickname={nickname} roomCode={roomCode} timer={timer} />;
+  return (
+    <GameTable
+      notice={message}
+      onPass={() => send({ type: 'pass' })}
+      onPlay={(cardIds, description) => send({ cardIds, description, type: 'play' })}
+      onQuickMessage={(quickMessage) => send({ message: quickMessage, type: 'quick-message' })}
+      view={view}
+    />
+  );
 }

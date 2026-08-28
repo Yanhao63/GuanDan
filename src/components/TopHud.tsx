@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Icon } from '../ui/Icon';
 
 interface TopHudProps {
+  level: string;
   roomCode: string;
   timerLabel: string;
 }
@@ -12,7 +13,7 @@ interface AudioState {
   voice: number;
 }
 
-export function TopHud({ roomCode, timerLabel }: TopHudProps) {
+export function TopHud({ level, roomCode, timerLabel }: TopHudProps) {
   const [showAudio, setShowAudio] = useState(false);
   const [audio, setAudio] = useState<AudioState>({ bgm: 35, effects: 70, voice: 65 });
 
@@ -25,7 +26,7 @@ export function TopHud({ roomCode, timerLabel }: TopHudProps) {
       <div className="hud-brand">掼蛋蛋</div>
       <div className="hud-divider" />
       <div className="hud-stat"><span>房间</span><strong>{roomCode}</strong></div>
-      <div className="hud-stat hud-level"><span>当前级牌</span><strong>2</strong></div>
+      <div className="hud-stat hud-level"><span>当前级牌</span><strong>{level}</strong></div>
       <div className="hud-team-score">
         <div><span>我方</span><strong>2</strong><small>打 A 失败 0/3</small></div>
         <i />
