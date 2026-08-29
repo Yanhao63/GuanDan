@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { sortDemoHand } from '../game/demoCards';
 import { classifyPlay } from '../game/rules/classify';
-import type { NetworkPlayEvent } from '../game/network';
+import type { NetworkPlayEvent, NetworkQuickMessage } from '../game/network';
 import type { RoomPlayerView, RoomView, TributeAction } from '../game/room';
 import type { Seat } from '../game/rules/match';
 import type { PlayInterpretation } from '../game/rules/types';
@@ -17,15 +17,40 @@ import { WildcardModal } from './WildcardModal';
 
 interface GameTableProps {
   activePlayEvent: NetworkPlayEvent | null;
+  activeQuickMessage: NetworkQuickMessage | null;
   notice?: string;
   onPass: () => void;
   onPlay: (cardIds: string[], description: string) => void;
   onPlayAnimationComplete: () => void;
   onQuickMessage: (message: string) => void;
+  onQuickMessageComplete: () => void;
   onNextDeal: () => void;
   onTributeAction: (action: Exclude<TributeAction, 'waiting'>, cardId: string) => void;
   reconnectCode: string;
   view: RoomView;
+}
+
+interface QuickMessageBubbleProps {
+  event: NetworkQuickMessage;
+  nickname: string;
+  onComplete: () => void;
+  selfSeat: Seat;
+}
+
+function QuickMessageBubble({ event, nickname, onComplete, selfSeat }: QuickMessageBubbleProps) {
+  const direction = getTableDirection(selfSeat, event.player);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(onComplete, 4_000);
+    return () => window.clearTimeout(timeout);
+  }, [event.id, onComplete]);
+
+  return (
+    <div aria-live="polite" className={`speech-bubble speech-bubble-${direction}`} role="status">
+      <strong>{nickname}</strong>
+      <span>{event.message}</span>
+    </div>
+  );
 }
 
 function relativeSeat(selfSeat: Seat, offset: 1 | 2 | 3): Seat {
@@ -42,12 +67,14 @@ function playerAt(view: RoomView, seat: Seat): RoomPlayerView {
 
 export function GameTable({
   activePlayEvent,
+  activeQuickMessage,
   notice = '',
   onNextDeal,
   onPass,
   onPlay,
   onPlayAnimationComplete,
   onQuickMessage,
+  onQuickMessageComplete,
   onTributeAction,
   reconnectCode,
   view,
@@ -57,7 +84,6 @@ export function GameTable({
   const [showWildcard, setShowWildcard] = useState(false);
   const [wildcardOptions, setWildcardOptions] = useState<PlayInterpretation[]>([]);
   const [localMessage, setLocalMessage] = useState('');
-  const [speech, setSpeech] = useState<string | null>(null);
 
   const hand = useMemo(() => sortDemoHand(view.hand, view.level), [view.hand, view.level]);
   const topPlayer = playerAt(view, relativeSeat(view.selfSeat, 2));
@@ -113,7 +139,6 @@ export function GameTable({
   };
 
   const sendMessage = (message: string) => {
-    setSpeech(message);
     setShowChat(false);
     onQuickMessage(message);
   };
@@ -131,6 +156,14 @@ export function GameTable({
       />
 
       <div className="table-canvas">
+        {activeQuickMessage !== null ? (
+          <QuickMessageBubble
+            event={activeQuickMessage}
+            nickname={playerAt(view, activeQuickMessage.player).nickname}
+            onComplete={onQuickMessageComplete}
+            selfSeat={view.selfSeat}
+          />
+        ) : null}
         <PlayerSeat cardCount={topPlayer.cardCount ?? undefined} isActive={view.pause === null && view.currentSeat === topPlayer.seat} isTeammate name={topPlayer.nickname} position="top" status={topPlayer.controlledByBot ? '机器人接管中' : topPlayer.connected ? '与你同队' : '等待重连'} />
         <PlayerSeat cardCount={leftPlayer.cardCount ?? undefined} isActive={view.pause === null && view.currentSeat === leftPlayer.seat} name={leftPlayer.nickname} position="left" status={leftPlayer.controlledByBot ? '机器人接管中' : leftPlayer.connected ? '牌局进行中' : '等待重连'} />
         <PlayerSeat cardCount={rightPlayer.cardCount ?? undefined} isActive={view.pause === null && view.currentSeat === rightPlayer.seat} name={rightPlayer.nickname} position="right" status={rightPlayer.controlledByBot ? '机器人接管中' : rightPlayer.connected ? '牌局进行中' : '等待重连'} />
@@ -154,7 +187,6 @@ export function GameTable({
         </div>
 
         <section className={`self-area${isSelfTurn ? ' self-area-active' : ''}`}>
-          {speech !== null ? <div className="speech-bubble">{speech}</div> : null}
           <div className="self-status">
             <div className="self-avatar">{selfPlayer.nickname.slice(0, 1)}</div>
             <div><strong>{selfPlayer.nickname}</strong><span>{selfPlayer.isHost ? '本家 · 房主' : '本家'}</span></div>

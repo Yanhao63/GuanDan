@@ -7,7 +7,13 @@ interface QuickChatDrawerProps {
 }
 
 const phrases = ['大家好，准备开始吧！', '出得漂亮。', '稍等一下，我想想。', '合作愉快！', '再来一局！'];
-const emojis = ['微笑', '赞', '鼓掌', '思考', '加油'];
+const emojis = [
+  { icon: '🙂', label: '微笑' },
+  { icon: '👍', label: '赞' },
+  { icon: '👏', label: '鼓掌' },
+  { icon: '🤔', label: '思考' },
+  { icon: '✨', label: '加油' },
+];
 
 export function QuickChatDrawer({ onClose, onSend }: QuickChatDrawerProps) {
   const [tab, setTab] = useState<'phrases' | 'emojis'>('phrases');
@@ -26,9 +32,9 @@ export function QuickChatDrawer({ onClose, onSend }: QuickChatDrawerProps) {
         {tab === 'phrases' ? phrases.map((phrase) => (
           <button key={phrase} onClick={() => onSend(phrase)} type="button">{phrase}</button>
         )) : emojis.map((emoji) => (
-          <button className="emoji-option" key={emoji} onClick={() => onSend(`[${emoji}]`)} type="button">
-            <span aria-hidden="true">{emoji === '微笑' ? '◡' : emoji === '赞' ? '♧' : emoji === '鼓掌' ? '※' : emoji === '思考' ? '…' : '✦'}</span>
-            {emoji}
+          <button className="emoji-option" key={emoji.label} onClick={() => onSend(`${emoji.icon} ${emoji.label}`)} type="button">
+            <span aria-hidden="true">{emoji.icon}</span>
+            {emoji.label}
           </button>
         ))}
       </div>

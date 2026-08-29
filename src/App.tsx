@@ -7,6 +7,7 @@ import {
   createRoom,
   type LiveRoomConnection,
   type NetworkPlayEvent,
+  type NetworkQuickMessage,
   type OutgoingMessage,
 } from './game/network';
 import type { JoinReceipt, RoomView } from './game/room';
@@ -36,6 +37,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [playEvents, setPlayEvents] = useState<NetworkPlayEvent[]>([]);
+  const [quickMessages, setQuickMessages] = useState<NetworkQuickMessage[]>([]);
   const [reconnectCode, setReconnectCode] = useState('');
   const [view, setView] = useState<RoomView | null>(null);
 
@@ -62,6 +64,7 @@ export function App() {
     setBusy(true);
     setMessage('');
     setPlayEvents([]);
+    setQuickMessages([]);
     connectionRef.current?.close();
     try {
       const connection = await connectRoom({
@@ -81,6 +84,9 @@ export function App() {
         },
         onPlayEvent: (event) => {
           setPlayEvents((current) => [...current, event].slice(-24));
+        },
+        onQuickMessage: (event) => {
+          setQuickMessages((current) => [...current, event].slice(-12));
         },
         onState: (nextView) => {
           setView(nextView);
@@ -121,6 +127,10 @@ export function App() {
 
   const consumePlayEvent = useCallback(() => {
     setPlayEvents((current) => current.slice(1));
+  }, []);
+
+  const consumeQuickMessage = useCallback(() => {
+    setQuickMessages((current) => current.slice(1));
   }, []);
 
   if (view === null) {
@@ -165,12 +175,14 @@ export function App() {
   return (
     <GameTable
       activePlayEvent={playEvents[0] ?? null}
+      activeQuickMessage={quickMessages[0] ?? null}
       notice={message}
       onNextDeal={() => send({ type: 'start-next-deal' })}
       onPass={() => send({ type: 'pass' })}
       onPlayAnimationComplete={consumePlayEvent}
       onPlay={(cardIds, description) => send({ cardIds, description, type: 'play' })}
       onQuickMessage={(quickMessage) => send({ message: quickMessage, type: 'quick-message' })}
+      onQuickMessageComplete={consumeQuickMessage}
       onTributeAction={(action, cardId) => send({ cardId, type: action })}
       reconnectCode={reconnectCode}
       view={view}

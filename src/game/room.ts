@@ -592,6 +592,10 @@ export class RoomEngine {
     return member.id;
   }
 
+  getSeatForSession(sessionId: string): Seat {
+    return this.getMember(sessionId).seat;
+  }
+
   applyDisconnectTimeouts(now = Date.now()): DisconnectEvent[] {
     const events: DisconnectEvent[] = [];
 

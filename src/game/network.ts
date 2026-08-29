@@ -20,11 +20,18 @@ interface ConnectionHandlers {
   onError: (message: string) => void;
   onJoined: (receipt: JoinReceipt, view: RoomView) => void;
   onPlayEvent: (event: NetworkPlayEvent) => void;
+  onQuickMessage: (event: NetworkQuickMessage) => void;
   onState: (view: RoomView) => void;
 }
 
 export interface NetworkPlayEvent extends RoomPlayEvent {
   id: string;
+}
+
+export interface NetworkQuickMessage {
+  id: string;
+  message: string;
+  player: Seat;
 }
 
 interface ConnectOptions extends ConnectionHandlers {
@@ -34,6 +41,7 @@ interface ConnectOptions extends ConnectionHandlers {
 }
 
 interface ServerMessage {
+  chat?: NetworkQuickMessage;
   message?: string;
   event?: NetworkPlayEvent;
   receipt?: JoinReceipt;
@@ -96,6 +104,10 @@ export function connectRoom(options: ConnectOptions): Promise<LiveRoomConnection
       }
       if (message.type === 'play-event' && message.event !== undefined) {
         options.onPlayEvent(message.event);
+        return;
+      }
+      if (message.type === 'quick-message' && message.chat !== undefined) {
+        options.onQuickMessage(message.chat);
         return;
       }
       if (message.type === 'error') {

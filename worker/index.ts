@@ -241,12 +241,23 @@ export class GameRoom extends DurableObject<Env> {
           this.room.returnTribute(attachment.sessionId, message.cardId);
           break;
         case 'quick-message':
+          if (message.message.trim().length === 0) {
+            throw new Error('消息不能为空');
+          }
+          const chatMessage = JSON.stringify({
+            chat: {
+              id: crypto.randomUUID(),
+              message: message.message.trim().slice(0, 40),
+              player: this.room.getSeatForSession(attachment.sessionId),
+            },
+            type: 'quick-message',
+          });
           this.ctx.getWebSockets().forEach((connection) => {
-            connection.send(JSON.stringify({
-              from: attachment.sessionId,
-              message: message.message.slice(0, 40),
-              type: 'quick-message',
-            }));
+            try {
+              connection.send(chatMessage);
+            } catch {
+              // The connection may have closed between enumeration and send.
+            }
           });
           return;
       }
