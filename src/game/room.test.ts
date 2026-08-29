@@ -50,6 +50,24 @@ describe('authoritative room engine', () => {
     expect(room.getView(host.sessionId)).toMatchObject({ phase: 'playing', timer: '60秒' });
   });
 
+  it('lets only the lobby host swap two occupied seats', () => {
+    const { receipts, room } = fullHumanRoom();
+
+    expect(() => room.swapSeats(receipts[1].sessionId, 0, 2)).toThrow(/房主/);
+    expect(() => room.swapSeats(receipts[0].sessionId, 0, 0)).toThrow(/不同/);
+
+    room.swapSeats(receipts[0].sessionId, 0, 2);
+    expect(room.getView(receipts[0].sessionId)).toMatchObject({ selfSeat: 2 });
+    expect(room.getView(receipts[2].sessionId)).toMatchObject({ selfSeat: 0 });
+    expect(room.getView(receipts[0].sessionId).players).toEqual(expect.arrayContaining([
+      expect.objectContaining({ isHost: true, nickname: '甲', seat: 2 }),
+      expect.objectContaining({ isHost: false, nickname: '丙', seat: 0 }),
+    ]));
+
+    room.start(receipts[0].sessionId);
+    expect(() => room.swapSeats(receipts[0].sessionId, 1, 3)).toThrow(/开始前/);
+  });
+
   it('applies the configured turn timeout on the authoritative clock', () => {
     const room = new RoomEngine('123456', () => 0, tokenSource());
     const receipts = ['甲', '乙', '丙', '丁'].map((name) => room.joinHuman(name));

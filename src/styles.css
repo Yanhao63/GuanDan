@@ -145,6 +145,8 @@ button:focus-visible, input:focus-visible {
 .seat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
 .lobby-seat { position: relative; display: grid; grid-template-columns: auto 64px 1fr auto; align-items: center; gap: 16px; min-height: 112px; border: 1px solid #c3a15b88; border-radius: 14px; padding: 15px 18px; background: linear-gradient(110deg, #07372cee, #05271ff5); box-shadow: 0 12px 24px #0004; }
 .lobby-seat-empty { border-style: dashed; background: #05271faa; }
+.lobby-seat-arrangeable { border-color: #d9bd72aa; }
+.lobby-seat-selected { border-color: var(--brass-bright); background: linear-gradient(110deg, #0b4939ee, #07372cf5); box-shadow: 0 0 0 2px #d8be7388, 0 12px 24px #0004; }
 .seat-number { color: var(--brass); font: 700 20px STSong, serif; }
 .lobby-avatar { display: grid; place-items: center; width: 58px; height: 58px; border: 2px solid var(--brass); border-radius: 50%; color: var(--walnut-deep); background: radial-gradient(circle at 35% 28%, #e7efdf, #8cab93 72%, #557c68); font: 700 25px STSong, serif; box-shadow: 0 0 0 4px #24170f; }
 .lobby-seat-empty .lobby-avatar { color: var(--brass); background: #062a22; }
@@ -152,6 +154,10 @@ button:focus-visible, input:focus-visible {
 .lobby-seat-copy span, .lobby-seat-copy small { color: var(--muted); font-size: 12px; }
 .lobby-seat-copy strong { font-size: 18px; }
 .ready-mark { display: inline-flex; align-items: center; gap: 5px; color: #cfe0c9; font-size: 13px; }
+.waiting-mark { color: var(--muted); font-size: 12px; }
+.seat-pick-button { min-width: 82px; }
+.seat-pick-button-selected { color: var(--walnut-deep); background: var(--brass-bright); }
+.arrange-hint { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; margin-top: 12px; border: 1px solid #c3a15b44; border-radius: 9px; color: var(--brass-bright); background: #05271faa; font-size: 13px; }
 .text-button { border: 0; color: var(--muted); background: none; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; }
 .room-settings { display: flex; align-items: end; justify-content: space-between; margin-top: 22px; border-block: 1px solid #c3a15b55; padding: 18px 0; }
 .reconnect-safety { display: grid; grid-template-columns: auto minmax(260px, 1fr) auto; align-items: center; gap: 18px; margin-top: 12px; border: 1px solid #c3a15b55; border-radius: 11px; padding: 10px 12px; background: #05271faa; }

@@ -150,11 +150,13 @@ export function App() {
         nickname={self?.nickname ?? '玩家'}
         onAddBot={(seat) => send({ seat, type: 'add-bot' })}
         onRemoveBot={(seat) => send({ seat, type: 'remove-bot' })}
+        onSwapSeats={(firstSeat, secondSeat) => send({ firstSeat, secondSeat, type: 'swap-seats' })}
         onStart={() => send({ type: 'start' })}
         onTimerChange={(timer: TimerChoice) => send({ timer, type: 'set-timer' })}
         players={players}
         reconnectCode={reconnectCode}
         roomCode={view.roomCode}
+        selfSeat={view.selfSeat}
         timer={view.timer}
       />
     );

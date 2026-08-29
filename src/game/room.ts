@@ -316,6 +316,31 @@ export class RoomEngine {
     this.members[seat] = null;
   }
 
+  swapSeats(hostSessionId: string, firstSeat: Seat, secondSeat: Seat): void {
+    this.requireLobby();
+    this.requireHost(hostSessionId);
+    if (firstSeat === secondSeat) {
+      throw new Error('请选择两个不同的座位');
+    }
+
+    const firstMember = this.members[firstSeat];
+    const secondMember = this.members[secondSeat];
+    if (firstMember === null || secondMember === null) {
+      throw new Error('只能交换已经入座的玩家');
+    }
+
+    firstMember.seat = secondSeat;
+    secondMember.seat = firstSeat;
+    this.members[firstSeat] = secondMember;
+    this.members[secondSeat] = firstMember;
+
+    this.members.forEach((member) => {
+      if (member?.kind === 'bot') {
+        member.nickname = `机器人 ${member.seat + 1}`;
+      }
+    });
+  }
+
   setTimer(hostSessionId: string, timer: TimerChoice): void {
     this.requireLobby();
     this.requireHost(hostSessionId);

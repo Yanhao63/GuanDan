@@ -5,6 +5,7 @@ import type { TimerChoice } from './types';
 export type OutgoingMessage =
   | { seat: Seat; type: 'add-bot' }
   | { seat: Seat; type: 'remove-bot' }
+  | { firstSeat: Seat; secondSeat: Seat; type: 'swap-seats' }
   | { timer: TimerChoice; type: 'set-timer' }
   | { type: 'start' }
   | { type: 'start-next-deal' }

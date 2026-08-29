@@ -21,6 +21,7 @@ interface ConnectionAttachment {
 type ClientMessage =
   | { seat: Seat; type: 'add-bot' }
   | { seat: Seat; type: 'remove-bot' }
+  | { firstSeat: Seat; secondSeat: Seat; type: 'swap-seats' }
   | { timer: TimerChoice; type: 'set-timer' }
   | { type: 'start' }
   | { type: 'start-next-deal' }
@@ -211,6 +212,9 @@ export class GameRoom extends DurableObject<Env> {
           break;
         case 'remove-bot':
           this.room.removeBot(attachment.sessionId, message.seat);
+          break;
+        case 'swap-seats':
+          this.room.swapSeats(attachment.sessionId, message.firstSeat, message.secondSeat);
           break;
         case 'set-timer':
           this.room.setTimer(attachment.sessionId, message.timer);
