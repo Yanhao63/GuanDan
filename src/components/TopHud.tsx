@@ -3,6 +3,7 @@ import { Icon } from '../ui/Icon';
 
 interface TopHudProps {
   level: string;
+  reconnectCode: string;
   roomCode: string;
   timerLabel: string;
 }
@@ -13,12 +14,17 @@ interface AudioState {
   voice: number;
 }
 
-export function TopHud({ level, roomCode, timerLabel }: TopHudProps) {
+export function TopHud({ level, reconnectCode, roomCode, timerLabel }: TopHudProps) {
   const [showAudio, setShowAudio] = useState(false);
+  const [showRoomSettings, setShowRoomSettings] = useState(false);
   const [audio, setAudio] = useState<AudioState>({ bgm: 35, effects: 70, voice: 65 });
 
   const setVolume = (key: keyof AudioState, value: number) => {
     setAudio((current) => ({ ...current, [key]: value }));
+  };
+
+  const copyReconnectCode = async () => {
+    await navigator.clipboard?.writeText(reconnectCode);
   };
 
   return (
@@ -38,7 +44,7 @@ export function TopHud({ level, roomCode, timerLabel }: TopHudProps) {
       <button aria-expanded={showAudio} aria-label="声音设置" className="hud-icon-button" onClick={() => setShowAudio((open) => !open)} type="button">
         <Icon name="audio" />
       </button>
-      <button aria-label="牌局设置" className="hud-icon-button" type="button"><Icon name="gear" /></button>
+      <button aria-expanded={showRoomSettings} aria-label="牌局设置" className="hud-icon-button" onClick={() => setShowRoomSettings((open) => !open)} type="button"><Icon name="gear" /></button>
 
       {showAudio ? (
         <section className="audio-popover" aria-label="声音设置">
@@ -46,6 +52,14 @@ export function TopHud({ level, roomCode, timerLabel }: TopHudProps) {
           <label>背景音乐 <input max="100" min="0" onChange={(event) => setVolume('bgm', Number(event.target.value))} type="range" value={audio.bgm} /></label>
           <label>出牌音效 <input max="100" min="0" onChange={(event) => setVolume('effects', Number(event.target.value))} type="range" value={audio.effects} /></label>
           <label>女声播报 <input max="100" min="0" onChange={(event) => setVolume('voice', Number(event.target.value))} type="range" value={audio.voice} /></label>
+        </section>
+      ) : null}
+      {showRoomSettings ? (
+        <section className="room-popover" aria-label="牌局设置">
+          <strong>掉线重连</strong>
+          <p>保存这段专用重连码，可以回到当前座位。</p>
+          <code>{reconnectCode}</code>
+          <button className="button button-compact" onClick={copyReconnectCode} type="button"><Icon name="copy" size={16} /> 复制重连码</button>
         </section>
       ) : null}
     </header>

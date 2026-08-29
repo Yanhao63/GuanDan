@@ -3,7 +3,7 @@ import { chooseBotAction } from './bot';
 import { classifyPlay } from './rules/classify';
 import { type MatchProgress, type Seat } from './rules/match';
 import { createTrickState, submitPass, submitPlay, type TrickState } from './rules/trick';
-import { getPublicCardCount } from './rules/timing';
+import { DISCONNECT_GRACE_MS, getPublicCardCount } from './rules/timing';
 import type { PlainRank, PlayInterpretation } from './rules/types';
 import type { CardData, PlayerKind, TimerChoice } from './types';
 
@@ -11,6 +11,9 @@ export type RoomPhase = 'lobby' | 'playing' | 'complete';
 
 export interface RoomMemberState {
   connected: boolean;
+  connectionId: string | null;
+  controlledByBot: boolean;
+  disconnectedAt: number | null;
   hand: CardData[];
   id: string;
   isHost: boolean;
@@ -40,6 +43,7 @@ export interface JoinReceipt {
 export interface RoomPlayerView {
   cardCount: number | null;
   connected: boolean;
+  controlledByBot: boolean;
   isHost: boolean;
   kind: PlayerKind;
   nickname: string;
@@ -56,6 +60,10 @@ export interface RoomView {
   };
   level: PlainRank;
   phase: RoomPhase;
+  pause: null | {
+    kind: 'host' | 'player';
+    seat: Seat;
+  };
   players: RoomPlayerView[];
   roomCode: string;
   selfSeat: Seat;
@@ -63,6 +71,10 @@ export interface RoomView {
 }
 
 export type TokenSource = () => string;
+
+export type DisconnectEvent =
+  | { seat: Seat; type: 'bot-takeover' }
+  | { from: Seat; to: Seat; type: 'host-transfer' };
 
 const INITIAL_PROGRESS: MatchProgress = {
   'team-a': { level: '2', aFailures: 0 },
@@ -105,7 +117,12 @@ export class RoomEngine {
   ): RoomEngine {
     const room = new RoomEngine(snapshot.roomCode, random, createToken);
     room.level = snapshot.level;
-    room.members = structuredClone(snapshot.members);
+    room.members = structuredClone(snapshot.members).map((member) => member === null ? null : ({
+      ...member,
+      connectionId: member.connectionId ?? null,
+      controlledByBot: member.controlledByBot ?? false,
+      disconnectedAt: member.disconnectedAt ?? null,
+    }));
     room.phase = snapshot.phase;
     room.progress = structuredClone(snapshot.progress);
     room.timer = snapshot.timer;
@@ -148,6 +165,8 @@ export class RoomEngine {
         throw new Error('该昵称已在房间中使用');
       }
       sameNickname.connected = true;
+      sameNickname.controlledByBot = false;
+      sameNickname.disconnectedAt = null;
       return this.makeReceipt(sameNickname);
     }
 
@@ -158,6 +177,9 @@ export class RoomEngine {
 
     const member: RoomMemberState = {
       connected: true,
+      connectionId: null,
+      controlledByBot: false,
+      disconnectedAt: null,
       hand: [],
       id: this.createToken(),
       isHost: this.members.every((candidate) => candidate === null),
@@ -178,17 +200,32 @@ export class RoomEngine {
     if (member === null || member === undefined) {
       throw new Error('没有找到可重连的座位');
     }
-    if (member.connected) {
-      throw new Error('该玩家当前仍在线');
-    }
     member.connected = true;
+    member.controlledByBot = false;
+    member.disconnectedAt = null;
     return this.makeReceipt(member);
   }
 
-  disconnect(sessionId: string): void {
+  attachConnection(sessionId: string, connectionId: string): void {
     const member = this.getMember(sessionId);
-    if (member.kind === 'human') {
+    if (member.kind !== 'human') {
+      throw new Error('机器人不需要网络连接');
+    }
+    member.connected = true;
+    member.connectionId = connectionId;
+    member.controlledByBot = false;
+    member.disconnectedAt = null;
+  }
+
+  disconnect(sessionId: string, disconnectedAt = Date.now(), connectionId?: string): void {
+    const member = this.getMember(sessionId);
+    if (connectionId !== undefined && member.connectionId !== connectionId) {
+      return;
+    }
+    if (member.kind === 'human' && member.connected) {
       member.connected = false;
+      member.connectionId = null;
+      member.disconnectedAt = disconnectedAt;
     }
   }
 
@@ -200,6 +237,9 @@ export class RoomEngine {
     }
     this.members[seat] = {
       connected: true,
+      connectionId: null,
+      controlledByBot: false,
+      disconnectedAt: null,
       hand: [],
       id: `bot-${seat}-${this.createToken()}`,
       isHost: false,
@@ -231,6 +271,9 @@ export class RoomEngine {
     if (this.members.some((member) => member === null)) {
       throw new Error('需要四位玩家全部入座');
     }
+    if (this.members.some((member) => member?.kind === 'human' && !member.connected)) {
+      throw new Error('有玩家掉线，暂时不能开始牌局');
+    }
 
     const hands = createShuffledDeal(this.random);
     this.members.forEach((member, seat) => {
@@ -246,6 +289,9 @@ export class RoomEngine {
   play(sessionId: string, cardIds: string[], description?: string): void {
     if (this.phase !== 'playing' || this.trick === null) {
       throw new Error('牌局当前不能出牌');
+    }
+    if (this.getPause() !== null) {
+      throw new Error('牌局正在等待掉线玩家重连');
     }
     const member = this.getMember(sessionId);
     if (new Set(cardIds).size !== cardIds.length) {
@@ -283,6 +329,9 @@ export class RoomEngine {
     if (this.phase !== 'playing' || this.trick === null) {
       throw new Error('牌局当前不能选择不要');
     }
+    if (this.getPause() !== null) {
+      throw new Error('牌局正在等待掉线玩家重连');
+    }
     const member = this.getMember(sessionId);
     this.trick = submitPass(this.trick, member.seat).state;
   }
@@ -291,8 +340,11 @@ export class RoomEngine {
     if (this.phase !== 'playing' || this.trick?.currentSeat === null || this.trick === null) {
       return false;
     }
+    if (this.getPause() !== null) {
+      return false;
+    }
     const member = this.members[this.trick.currentSeat];
-    if (member === null || member.kind !== 'bot') {
+    if (member === null || (member.kind !== 'bot' && !member.controlledByBot)) {
       return false;
     }
 
@@ -329,9 +381,11 @@ export class RoomEngine {
           },
       level: this.level,
       phase: this.phase,
+      pause: this.getPause(),
       players: this.members.flatMap((member) => member === null ? [] : [{
         cardCount: member.id === sessionId ? member.hand.length : getPublicCardCount(member.hand.length),
         connected: member.connected,
+        controlledByBot: member.controlledByBot,
         isHost: member.isHost,
         kind: member.kind,
         nickname: member.nickname,
@@ -365,6 +419,97 @@ export class RoomEngine {
       throw new Error('该座位为空');
     }
     return member.id;
+  }
+
+  applyDisconnectTimeouts(now = Date.now()): DisconnectEvent[] {
+    const events: DisconnectEvent[] = [];
+
+    for (const member of this.members) {
+      if (
+        member === null
+        || member.kind !== 'human'
+        || member.connected
+        || member.disconnectedAt === null
+        || now - member.disconnectedAt < DISCONNECT_GRACE_MS
+      ) {
+        continue;
+      }
+
+      if (member.isHost && this.phase === 'lobby') {
+        const replacement = this.findNextConnectedHuman(member.seat);
+        if (replacement !== null) {
+          member.isHost = false;
+          replacement.isHost = true;
+          member.disconnectedAt = null;
+          events.push({ from: member.seat, to: replacement.seat, type: 'host-transfer' });
+        }
+        continue;
+      }
+
+      if (!member.isHost && this.phase === 'playing' && !member.controlledByBot) {
+        member.controlledByBot = true;
+        events.push({ seat: member.seat, type: 'bot-takeover' });
+      }
+    }
+
+    return events;
+  }
+
+  getNextDisconnectDeadline(): number | null {
+    const deadlines = this.members.flatMap((member) => {
+      if (
+        member === null
+        || member.kind !== 'human'
+        || member.connected
+        || member.disconnectedAt === null
+        || member.controlledByBot
+      ) {
+        return [];
+      }
+
+      if (member.isHost) {
+        return this.phase === 'lobby' && this.findNextConnectedHuman(member.seat) !== null
+          ? [member.disconnectedAt + DISCONNECT_GRACE_MS]
+          : [];
+      }
+      return this.phase === 'playing'
+        ? [member.disconnectedAt + DISCONNECT_GRACE_MS]
+        : [];
+    });
+    return deadlines.length === 0 ? null : Math.min(...deadlines);
+  }
+
+  private getPause(): RoomView['pause'] {
+    if (this.phase !== 'playing') {
+      return null;
+    }
+    const host = this.members.find((member) => member?.isHost);
+    if (host !== null && host !== undefined && !host.connected) {
+      return { kind: 'host', seat: host.seat };
+    }
+    if (this.trick?.currentSeat === null || this.trick === null) {
+      return null;
+    }
+    const current = this.members[this.trick.currentSeat];
+    if (
+      current !== null
+      && current.kind === 'human'
+      && !current.connected
+      && !current.controlledByBot
+    ) {
+      return { kind: 'player', seat: current.seat };
+    }
+    return null;
+  }
+
+  private findNextConnectedHuman(after: Seat): RoomMemberState | null {
+    for (let offset = 1; offset < 4; offset += 1) {
+      const candidate = this.members[((after + offset) % 4) as Seat];
+      if (candidate?.kind === 'human' && candidate.connected) {
+        return candidate;
+      }
+    }
+    return null;
   }
 
   private makeReceipt(member: RoomMemberState): JoinReceipt {

@@ -5,6 +5,7 @@ import { BrandMark } from './BrandMark';
 interface LobbyScreenProps {
   nickname: string;
   players: Array<RoomPlayer | null>;
+  reconnectCode: string;
   roomCode: string;
   timer: TimerChoice;
   onAddBot: (seat: 0 | 1 | 2 | 3) => void;
@@ -19,6 +20,7 @@ const timers: TimerChoice[] = ['不限时', '30秒', '60秒', '90秒'];
 export function LobbyScreen({
   nickname,
   players,
+  reconnectCode,
   roomCode,
   timer,
   onAddBot,
@@ -30,6 +32,10 @@ export function LobbyScreen({
 
   const copyInvitation = async () => {
     await navigator.clipboard?.writeText(`来玩掼蛋蛋，房间号：${roomCode}`);
+  };
+
+  const copyReconnectCode = async () => {
+    await navigator.clipboard?.writeText(reconnectCode);
   };
 
   return (
@@ -98,6 +104,12 @@ export function LobbyScreen({
             <Icon name="shuffle" size={20} /> 调整座位
           </button>
         </aside>
+
+        <div className="reconnect-safety">
+          <div><strong>我的专用重连码</strong><span>请只保存自己的重连码；掉线后可回到原座位。</span></div>
+          <code>{reconnectCode}</code>
+          <button className="button button-compact" onClick={copyReconnectCode} type="button"><Icon name="copy" size={16} /> 复制</button>
+        </div>
 
         <div className="lobby-actions">
           <span>{isFull ? '四位玩家已就绪' : `还差 ${players.filter((player) => player === null).length} 位玩家`}</span>

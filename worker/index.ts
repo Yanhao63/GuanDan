@@ -9,6 +9,7 @@ interface Env {
 }
 
 interface ConnectionAttachment {
+  connectionId: string;
   sessionId: string;
 }
 
@@ -68,6 +69,15 @@ export class GameRoom extends DurableObject<Env> {
     if (this.room !== null) {
       await this.ctx.storage.put('room', this.room.toSnapshot());
     }
+  }
+
+  private async syncDisconnectAlarm(): Promise<void> {
+    const deadline = this.room?.getNextDisconnectDeadline() ?? null;
+    if (deadline === null) {
+      await this.ctx.storage.deleteAlarm();
+      return;
+    }
+    await this.ctx.storage.setAlarm(Math.max(deadline, Date.now() + 1));
   }
 
   private sendView(ws: WebSocket): void {
@@ -137,10 +147,21 @@ export class GameRoom extends DurableObject<Env> {
       return json({ error: error instanceof Error ? error.message : '无法加入房间' }, 409);
     }
 
+    const connectionId = crypto.randomUUID();
+    this.room.attachConnection(receipt.sessionId, connectionId);
+    this.ctx.getWebSockets().forEach((connection) => {
+      const existing = connection.deserializeAttachment() as ConnectionAttachment | null;
+      if (existing?.sessionId === receipt.sessionId) {
+        connection.close(1000, '同一座位已建立新连接');
+      }
+    });
+
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ sessionId: receipt.sessionId } satisfies ConnectionAttachment);
+    server.serializeAttachment({ connectionId, sessionId: receipt.sessionId } satisfies ConnectionAttachment);
+    this.runBotsUntilHuman();
     await this.persist();
+    await this.syncDisconnectAlarm();
     server.send(JSON.stringify({ type: 'joined', receipt, view: this.room.getView(receipt.sessionId) }));
     this.broadcastViews();
 
@@ -188,6 +209,7 @@ export class GameRoom extends DurableObject<Env> {
       }
       this.runBotsUntilHuman();
       await this.persist();
+      await this.syncDisconnectAlarm();
       this.broadcastViews();
     } catch (error) {
       ws.send(JSON.stringify({
@@ -201,14 +223,27 @@ export class GameRoom extends DurableObject<Env> {
     await this.ready;
     const attachment = ws.deserializeAttachment() as ConnectionAttachment | null;
     if (attachment !== null && this.room !== null) {
-      this.room.disconnect(attachment.sessionId);
+      this.room.disconnect(attachment.sessionId, Date.now(), attachment.connectionId);
       await this.persist();
+      await this.syncDisconnectAlarm();
       this.broadcastViews();
     }
   }
 
   async webSocketError(ws: WebSocket): Promise<void> {
     await this.webSocketClose(ws);
+  }
+
+  async alarm(): Promise<void> {
+    await this.ready;
+    if (this.room === null) {
+      return;
+    }
+    this.room.applyDisconnectTimeouts(Date.now());
+    this.runBotsUntilHuman();
+    await this.persist();
+    await this.syncDisconnectAlarm();
+    this.broadcastViews();
   }
 }
 

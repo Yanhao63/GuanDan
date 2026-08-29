@@ -6,12 +6,15 @@ interface EntryScreenProps {
   errorMessage?: string;
   onCreateRoom: (nickname: string) => void;
   onJoinRoom: (nickname: string, roomCode: string) => void;
+  onReconnect: (roomCode: string, reconnectCode: string) => void;
 }
 
-export function EntryScreen({ busy = false, errorMessage = '', onCreateRoom, onJoinRoom }: EntryScreenProps) {
+export function EntryScreen({ busy = false, errorMessage = '', onCreateRoom, onJoinRoom, onReconnect }: EntryScreenProps) {
   const [nickname, setNickname] = useState('');
+  const [reconnectCode, setReconnectCode] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [message, setMessage] = useState('');
+  const [showReconnect, setShowReconnect] = useState(false);
 
   const normalizedNickname = nickname.trim();
 
@@ -33,6 +36,18 @@ export function EntryScreen({ busy = false, errorMessage = '', onCreateRoom, onJ
       return;
     }
     onJoinRoom(normalizedNickname, roomCode);
+  };
+
+  const handleReconnect = () => {
+    if (!/^\d{6}$/.test(roomCode)) {
+      setMessage('请输入 6 位房间号');
+      return;
+    }
+    if (reconnectCode.trim().length === 0) {
+      setMessage('请输入专用重连码');
+      return;
+    }
+    onReconnect(roomCode, reconnectCode.trim());
   };
 
   return (
@@ -86,6 +101,39 @@ export function EntryScreen({ busy = false, errorMessage = '', onCreateRoom, onJ
         <p aria-live="polite" className={message.length > 0 || errorMessage.length > 0 ? 'form-message form-message-visible' : 'form-message'}>
           {message.length > 0 ? message : errorMessage.length > 0 ? errorMessage : '无需账号，浏览器会安全保存你的重连信息'}
         </p>
+
+        <button
+          className="text-button reconnect-toggle"
+          disabled={busy}
+          onClick={() => {
+            setShowReconnect((current) => !current);
+            setMessage('');
+          }}
+          type="button"
+        >
+          {showReconnect ? '收起重连入口' : '使用专用重连码'}
+        </button>
+
+        {showReconnect ? (
+          <div className="reconnect-panel">
+            <label className="field-label" htmlFor="reconnect-code">专用重连码</label>
+            <div className="join-row">
+              <input
+                autoComplete="off"
+                className="text-field reconnect-code-field"
+                id="reconnect-code"
+                maxLength={64}
+                onChange={(event) => {
+                  setReconnectCode(event.target.value);
+                  setMessage('');
+                }}
+                placeholder="粘贴掉线前保存的重连码"
+                value={reconnectCode}
+              />
+              <button className="button button-secondary" disabled={busy} onClick={handleReconnect} type="button">回到座位</button>
+            </div>
+          </div>
+        ) : null}
       </section>
     </main>
   );

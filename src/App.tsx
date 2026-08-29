@@ -34,6 +34,7 @@ export function App() {
   const connectionRef = useRef<LiveRoomConnection | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [reconnectCode, setReconnectCode] = useState('');
   const [view, setView] = useState<RoomView | null>(null);
 
   useEffect(() => () => connectionRef.current?.close(), []);
@@ -64,10 +65,14 @@ export function App() {
         nickname,
         onError: setMessage,
         onJoined: (receipt: JoinReceipt, initialView: RoomView) => {
+          const resolvedNickname = initialView.players.find(
+            (player) => player.seat === initialView.selfSeat,
+          )?.nickname ?? nickname;
           localStorage.setItem(reconnectStorageKey(roomCode), JSON.stringify({
-            nickname,
+            nickname: resolvedNickname,
             reconnectCode: receipt.reconnectCode,
           }));
+          setReconnectCode(receipt.reconnectCode);
           setView(initialView);
           setMessage('');
         },
@@ -104,6 +109,10 @@ export function App() {
     void openConnection(nickname, roomCode, getSavedReconnectCode(roomCode, nickname));
   };
 
+  const handleReconnect = (roomCode: string, reconnectCode: string) => {
+    void openConnection('', roomCode, reconnectCode);
+  };
+
   if (view === null) {
     return (
       <EntryScreen
@@ -111,6 +120,7 @@ export function App() {
         errorMessage={message}
         onCreateRoom={handleCreateRoom}
         onJoinRoom={handleJoinRoom}
+        onReconnect={handleReconnect}
       />
     );
   }
@@ -133,6 +143,7 @@ export function App() {
         onStart={() => send({ type: 'start' })}
         onTimerChange={(timer: TimerChoice) => send({ timer, type: 'set-timer' })}
         players={players}
+        reconnectCode={reconnectCode}
         roomCode={view.roomCode}
         timer={view.timer}
       />
@@ -145,6 +156,7 @@ export function App() {
       onPass={() => send({ type: 'pass' })}
       onPlay={(cardIds, description) => send({ cardIds, description, type: 'play' })}
       onQuickMessage={(quickMessage) => send({ message: quickMessage, type: 'quick-message' })}
+      reconnectCode={reconnectCode}
       view={view}
     />
   );

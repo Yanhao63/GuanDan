@@ -16,6 +16,7 @@ interface GameTableProps {
   onPass: () => void;
   onPlay: (cardIds: string[], description: string) => void;
   onQuickMessage: (message: string) => void;
+  reconnectCode: string;
   view: RoomView;
 }
 
@@ -31,7 +32,7 @@ function playerAt(view: RoomView, seat: Seat): RoomPlayerView {
   return player;
 }
 
-export function GameTable({ notice = '', onPass, onPlay, onQuickMessage, view }: GameTableProps) {
+export function GameTable({ notice = '', onPass, onPlay, onQuickMessage, reconnectCode, view }: GameTableProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showChat, setShowChat] = useState(false);
   const [showWildcard, setShowWildcard] = useState(false);
@@ -44,7 +45,8 @@ export function GameTable({ notice = '', onPass, onPlay, onQuickMessage, view }:
   const leftPlayer = playerAt(view, relativeSeat(view.selfSeat, 3));
   const rightPlayer = playerAt(view, relativeSeat(view.selfSeat, 1));
   const selfPlayer = playerAt(view, view.selfSeat);
-  const isSelfTurn = view.currentSeat === view.selfSeat;
+  const pausedPlayer = view.pause === null ? null : playerAt(view, view.pause.seat);
+  const isSelfTurn = view.pause === null && view.currentSeat === view.selfSeat;
   const tableMessage = notice.length > 0
     ? notice
     : localMessage.length > 0
@@ -74,7 +76,7 @@ export function GameTable({ notice = '', onPass, onPlay, onQuickMessage, view }:
   };
 
   const handlePlay = () => {
-    const interpretations = classifyPlay(selectedCards, '2');
+    const interpretations = classifyPlay(selectedCards, view.level);
 
     if (interpretations.length > 1) {
       setWildcardOptions(interpretations);
@@ -96,12 +98,12 @@ export function GameTable({ notice = '', onPass, onPlay, onQuickMessage, view }:
 
   return (
     <main className="game-screen">
-      <TopHud level={view.level} roomCode={view.roomCode} timerLabel={view.timer} />
+      <TopHud level={view.level} reconnectCode={reconnectCode} roomCode={view.roomCode} timerLabel={view.timer} />
 
       <div className="table-canvas">
-        <PlayerSeat cardCount={topPlayer.cardCount ?? undefined} isActive={view.currentSeat === topPlayer.seat} isTeammate name={topPlayer.nickname} position="top" status={topPlayer.connected ? '与你同队' : '等待重连'} />
-        <PlayerSeat cardCount={leftPlayer.cardCount ?? undefined} isActive={view.currentSeat === leftPlayer.seat} name={leftPlayer.nickname} position="left" status={leftPlayer.connected ? '牌局进行中' : '等待重连'} />
-        <PlayerSeat cardCount={rightPlayer.cardCount ?? undefined} isActive={view.currentSeat === rightPlayer.seat} name={rightPlayer.nickname} position="right" status={rightPlayer.connected ? '牌局进行中' : '等待重连'} />
+        <PlayerSeat cardCount={topPlayer.cardCount ?? undefined} isActive={view.pause === null && view.currentSeat === topPlayer.seat} isTeammate name={topPlayer.nickname} position="top" status={topPlayer.controlledByBot ? '机器人接管中' : topPlayer.connected ? '与你同队' : '等待重连'} />
+        <PlayerSeat cardCount={leftPlayer.cardCount ?? undefined} isActive={view.pause === null && view.currentSeat === leftPlayer.seat} name={leftPlayer.nickname} position="left" status={leftPlayer.controlledByBot ? '机器人接管中' : leftPlayer.connected ? '牌局进行中' : '等待重连'} />
+        <PlayerSeat cardCount={rightPlayer.cardCount ?? undefined} isActive={view.pause === null && view.currentSeat === rightPlayer.seat} name={rightPlayer.nickname} position="right" status={rightPlayer.controlledByBot ? '机器人接管中' : rightPlayer.connected ? '牌局进行中' : '等待重连'} />
 
         <div className="table-center">
           <div className="round-state">
@@ -143,6 +145,16 @@ export function GameTable({ notice = '', onPass, onPlay, onQuickMessage, view }:
             ))}
           </div>
         </section>
+
+        {view.pause !== null && pausedPlayer !== null ? (
+          <div className="pause-backdrop" role="status">
+            <section className="pause-card">
+              <span>牌局暂停</span>
+              <h2>等待 {pausedPlayer.nickname} 重连</h2>
+              <p>{view.pause.kind === 'host' ? '房主回来后牌局继续，进行中不会转移房主或启用机器人。' : '若 120 秒内仍未回来，将由机器人暂时接管；本人回来后可随时重新接手。'}</p>
+            </section>
+          </div>
+        ) : null}
       </div>
 
       {showChat ? <QuickChatDrawer onClose={() => setShowChat(false)} onSend={sendMessage} /> : null}

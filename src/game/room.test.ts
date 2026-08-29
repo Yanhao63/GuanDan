@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RoomEngine } from './room';
+import { DISCONNECT_GRACE_MS } from './rules/timing';
 
 function seededRandom(seed: number): () => number {
   let state = seed >>> 0;
@@ -95,6 +96,21 @@ describe('authoritative room engine', () => {
     expect(byCode.seat).toBe(host.seat);
   });
 
+  it('ignores a stale socket close after a newer reconnect takes over the same seat', () => {
+    const room = new RoomEngine('123456', seededRandom(4), tokenSource());
+    const host = room.joinHuman('刷新回来');
+    room.attachConnection(host.sessionId, 'connection-old');
+
+    room.reconnect(host.reconnectCode);
+    room.attachConnection(host.sessionId, 'connection-new');
+    room.disconnect(host.sessionId, 1_000, 'connection-old');
+
+    expect(room.getView(host.sessionId).players[0].connected).toBe(true);
+
+    room.disconnect(host.sessionId, 2_000, 'connection-new');
+    expect(room.getView(host.sessionId).players[0].connected).toBe(false);
+  });
+
   it('restores the authoritative room from a persisted snapshot', () => {
     const { receipts, room } = fullHumanRoom();
     room.setTimer(receipts[0].sessionId, '90秒');
@@ -125,5 +141,56 @@ describe('authoritative room engine', () => {
 
     const view = room.getView(host.sessionId);
     expect(view.phase === 'complete' || view.currentSeat === host.seat).toBe(true);
+  });
+
+  it('transfers a disconnected lobby host after 120 seconds', () => {
+    const { receipts, room } = fullHumanRoom();
+    room.disconnect(receipts[0].sessionId, 1_000);
+
+    expect(room.getNextDisconnectDeadline()).toBe(1_000 + DISCONNECT_GRACE_MS);
+    expect(room.applyDisconnectTimeouts(1_000 + DISCONNECT_GRACE_MS - 1)).toEqual([]);
+    expect(room.applyDisconnectTimeouts(1_000 + DISCONNECT_GRACE_MS)).toEqual([
+      { from: 0, to: 1, type: 'host-transfer' },
+    ]);
+    expect(room.getView(receipts[1].sessionId).players.find((player) => player.seat === 1)?.isHost).toBe(true);
+  });
+
+  it('pauses on an ordinary player turn, then lets a bot take over after 120 seconds', () => {
+    const room = new RoomEngine('123456', () => 0.3, tokenSource());
+    const receipts = ['甲', '乙', '丙', '丁'].map((name) => room.joinHuman(name));
+    room.start(receipts[0].sessionId);
+    expect(room.getView(receipts[0].sessionId).currentSeat).toBe(1);
+
+    room.disconnect(receipts[1].sessionId, 5_000);
+    expect(room.getView(receipts[0].sessionId).pause).toEqual({ kind: 'player', seat: 1 });
+    expect(room.runCurrentBotTurn()).toBe(false);
+
+    expect(room.applyDisconnectTimeouts(5_000 + DISCONNECT_GRACE_MS)).toEqual([
+      { seat: 1, type: 'bot-takeover' },
+    ]);
+    expect(room.getView(receipts[0].sessionId).pause).toBeNull();
+    expect(room.getView(receipts[0].sessionId).players.find((player) => player.seat === 1)?.controlledByBot).toBe(true);
+    expect(room.runCurrentBotTurn()).toBe(true);
+
+    room.reconnect(receipts[1].reconnectCode);
+    expect(room.getView(receipts[1].sessionId).players.find((player) => player.seat === 1)).toMatchObject({
+      connected: true,
+      controlledByBot: false,
+    });
+  });
+
+  it('keeps an active game paused indefinitely while the original host is disconnected', () => {
+    const room = new RoomEngine('123456', () => 0.3, tokenSource());
+    const receipts = ['甲', '乙', '丙', '丁'].map((name) => room.joinHuman(name));
+    room.start(receipts[0].sessionId);
+    room.disconnect(receipts[0].sessionId, 8_000);
+
+    expect(room.getView(receipts[1].sessionId).pause).toEqual({ kind: 'host', seat: 0 });
+    expect(room.getNextDisconnectDeadline()).toBeNull();
+    expect(room.applyDisconnectTimeouts(8_000 + DISCONNECT_GRACE_MS * 2)).toEqual([]);
+    expect(() => room.play(
+      receipts[1].sessionId,
+      [room.getView(receipts[1].sessionId).hand[0].id],
+    )).toThrow(/等待掉线玩家/);
   });
 });
