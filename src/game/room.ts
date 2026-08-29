@@ -45,6 +45,7 @@ export interface RoomMemberState {
 }
 
 export interface RoomSnapshot {
+  dealNumber?: number;
   level: PlainRank;
   members: Array<RoomMemberState | null>;
   phase: RoomPhase;
@@ -82,6 +83,7 @@ export interface RoomPlayEvent {
 
 export interface RoomView {
   currentSeat: Seat | null;
+  dealNumber: number;
   finishOrder: Seat[];
   hand: CardData[];
   lastPlay: null | {
@@ -141,6 +143,7 @@ function playMatchesDescription(play: PlayInterpretation, description: string | 
 }
 
 export class RoomEngine {
+  private dealNumber = 0;
   private level: PlainRank = '2';
   private members: Array<RoomMemberState | null> = [null, null, null, null];
   private phase: RoomPhase = 'lobby';
@@ -163,6 +166,7 @@ export class RoomEngine {
     createToken: TokenSource,
   ): RoomEngine {
     const room = new RoomEngine(snapshot.roomCode, random, createToken);
+    room.dealNumber = snapshot.dealNumber ?? 0;
     room.level = snapshot.level;
     room.members = structuredClone(snapshot.members).map((member) => member === null ? null : ({
       ...member,
@@ -358,6 +362,7 @@ export class RoomEngine {
     }
 
     const hands = createShuffledDeal(this.random);
+    this.dealNumber += 1;
     this.members.forEach((member, seat) => {
       if (member !== null) {
         member.hand = hands[seat as Seat];
@@ -385,6 +390,7 @@ export class RoomEngine {
 
     const finishOrder = [...this.trick.finishOrder];
     const hands = createShuffledDeal(this.random);
+    this.dealNumber += 1;
     this.applyHands(hands);
     this.trick = null;
     this.settlement = null;
@@ -534,6 +540,7 @@ export class RoomEngine {
     const self = this.getMember(sessionId);
     return {
       currentSeat: this.trick?.currentSeat ?? null,
+      dealNumber: this.dealNumber,
       finishOrder: [...(this.trick?.finishOrder ?? [])],
       hand: [...self.hand],
       lastPlay: this.trick?.lastPlay === null || this.trick?.lastPlayer === null || this.trick === null
@@ -571,6 +578,7 @@ export class RoomEngine {
 
   toSnapshot(): RoomSnapshot {
     return {
+      dealNumber: this.dealNumber,
       level: this.level,
       members: structuredClone(this.members),
       phase: this.phase,

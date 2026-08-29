@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { gameAudio, loadAudioSettings, type AudioSettings } from '../audio/gameAudio';
 import { sortDemoHand } from '../game/demoCards';
 import { classifyPlay } from '../game/rules/classify';
+import { applyHandOrder, moveCardBefore } from '../game/handOrder';
 import type { NetworkPlayEvent, NetworkQuickMessage } from '../game/network';
 import type { RoomPlayerView, RoomView, TributeAction } from '../game/room';
 import type { Seat } from '../game/rules/match';
@@ -36,6 +37,14 @@ interface QuickMessageBubbleProps {
   nickname: string;
   onComplete: () => void;
   selfSeat: Seat;
+}
+
+interface PointerDragState {
+  active: boolean;
+  cardId: string;
+  startX: number;
+  startY: number;
+  targetId: string;
 }
 
 function QuickMessageBubble({ event, nickname, onComplete, selfSeat }: QuickMessageBubbleProps) {
@@ -81,13 +90,19 @@ export function GameTable({
   view,
 }: GameTableProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [handOrder, setHandOrder] = useState<string[]>([]);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragTargetId, setDragTargetId] = useState<string | null>(null);
+  const pointerDragRef = useRef<PointerDragState | null>(null);
+  const suppressToggleRef = useRef(false);
   const [audio, setAudio] = useState<AudioSettings>(loadAudioSettings);
   const [showChat, setShowChat] = useState(false);
   const [showWildcard, setShowWildcard] = useState(false);
   const [wildcardOptions, setWildcardOptions] = useState<PlayInterpretation[]>([]);
   const [localMessage, setLocalMessage] = useState('');
 
-  const hand = useMemo(() => sortDemoHand(view.hand, view.level), [view.hand, view.level]);
+  const sortedHand = useMemo(() => sortDemoHand(view.hand, view.level), [view.hand, view.level]);
+  const hand = useMemo(() => applyHandOrder(sortedHand, handOrder), [handOrder, sortedHand]);
   const topPlayer = playerAt(view, relativeSeat(view.selfSeat, 2));
   const leftPlayer = playerAt(view, relativeSeat(view.selfSeat, 3));
   const rightPlayer = playerAt(view, relativeSeat(view.selfSeat, 1));
@@ -132,7 +147,69 @@ export function GameTable({
   };
 
   const toggleCard = (cardId: string) => {
+    if (suppressToggleRef.current) {
+      suppressToggleRef.current = false;
+      return;
+    }
     setSelectedIds((current) => current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId]);
+  };
+
+  const beginPointerDrag = (event: PointerEvent<HTMLDivElement>) => {
+    const card = (event.target as HTMLElement).closest<HTMLElement>('[data-card-id]');
+    const cardId = card?.dataset.cardId;
+    if (cardId === undefined) {
+      return;
+    }
+    pointerDragRef.current = {
+      active: false,
+      cardId,
+      startX: event.clientX,
+      startY: event.clientY,
+      targetId: cardId,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const movePointerDrag = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = pointerDragRef.current;
+    if (drag === null) {
+      return;
+    }
+    if (!drag.active && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 6) {
+      drag.active = true;
+      setHandOrder(hand.map((card) => card.id));
+      setDraggingId(drag.cardId);
+      setDragTargetId(drag.cardId);
+    }
+    if (!drag.active) {
+      return;
+    }
+    const target = document.elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLElement>('[data-card-id]');
+    const targetId = target?.dataset.cardId;
+    if (targetId !== undefined && targetId !== drag.targetId) {
+      drag.targetId = targetId;
+      setDragTargetId(targetId);
+    }
+  };
+
+  const finishPointerDrag = () => {
+    const drag = pointerDragRef.current;
+    if (drag?.active) {
+      setHandOrder((current) => moveCardBefore(current, drag.cardId, drag.targetId));
+      suppressToggleRef.current = true;
+      window.setTimeout(() => {
+        suppressToggleRef.current = false;
+      }, 0);
+    }
+    pointerDragRef.current = null;
+    setDraggingId(null);
+    setDragTargetId(null);
+  };
+
+  const sortHand = () => {
+    setHandOrder([]);
+    setSelectedIds([]);
   };
 
   const commitPlay = (wildcardChoice?: PlayInterpretation) => {
@@ -226,13 +303,29 @@ export function GameTable({
             <button className="button button-primary play-button" disabled={!isSelfTurn || selectedIds.length === 0} onClick={handlePlay} type="button">
               出牌{selectedIds.length > 0 ? ` · ${selectedIds.length} 张` : ''}
             </button>
-            <button aria-label="整理手牌" className="round-action" onClick={() => setSelectedIds([])} type="button"><Icon name="sort" /></button>
+            <button aria-label="整理手牌" className="round-action" onClick={sortHand} type="button"><Icon name="sort" /></button>
             <button aria-label="快捷语和表情" className="round-action" onClick={() => setShowChat(true)} type="button"><Icon name="chat" /></button>
           </div>
 
-          <div className="hand-rack" aria-label={`你的手牌，共 ${hand.length} 张`}>
+          <div
+            aria-label={`你的手牌，共 ${hand.length} 张`}
+            className={`hand-rack${draggingId === null ? '' : ' hand-rack-dragging'}`}
+            onPointerCancel={finishPointerDrag}
+            onPointerDown={beginPointerDrag}
+            onPointerMove={movePointerDrag}
+            onPointerUp={finishPointerDrag}
+          >
             {hand.map((card, index) => (
-              <PokerCard card={card} index={index} key={card.id} onToggle={toggleCard} selected={selectedIds.includes(card.id)} />
+              <PokerCard
+                card={card}
+                dragging={draggingId === card.id}
+                dragTarget={draggingId !== null && dragTargetId === card.id}
+                index={index}
+                key={card.id}
+                onToggle={toggleCard}
+                reorderable
+                selected={selectedIds.includes(card.id)}
+              />
             ))}
           </div>
         </section>

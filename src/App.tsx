@@ -176,6 +176,7 @@ export function App() {
     <GameTable
       activePlayEvent={playEvents[0] ?? null}
       activeQuickMessage={quickMessages[0] ?? null}
+      key={`${view.roomCode}-${view.dealNumber}`}
       notice={message}
       onNextDeal={() => send({ type: 'start-next-deal' })}
       onPass={() => send({ type: 'pass' })}
