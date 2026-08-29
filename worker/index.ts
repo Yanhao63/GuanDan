@@ -1,5 +1,10 @@
 import { DurableObject } from 'cloudflare:workers';
-import { RoomEngine, type JoinReceipt, type RoomSnapshot } from '../src/game/room';
+import {
+  RoomEngine,
+  type JoinReceipt,
+  type RoomPlayEvent,
+  type RoomSnapshot,
+} from '../src/game/room';
 import type { Seat } from '../src/game/rules/match';
 import type { TimerChoice } from '../src/game/types';
 
@@ -106,12 +111,26 @@ export class GameRoom extends DurableObject<Env> {
     this.ctx.getWebSockets().forEach((ws) => this.sendView(ws));
   }
 
+  private broadcastPlayEvent(event: RoomPlayEvent): void {
+    const message = JSON.stringify({
+      event: { ...event, id: crypto.randomUUID() },
+      type: 'play-event',
+    });
+    this.ctx.getWebSockets().forEach((ws) => {
+      try {
+        ws.send(message);
+      } catch {
+        // The connection may have closed between enumeration and send.
+      }
+    });
+  }
+
   private runBotsUntilHuman(): void {
     if (this.room === null) {
       return;
     }
     let turns = 0;
-    while (this.room.runCurrentBotTurn()) {
+    while (this.room.runCurrentBotTurn((event) => this.broadcastPlayEvent(event))) {
       turns += 1;
       if (turns >= 200) {
         throw new Error('机器人连续回合超过安全上限');
@@ -185,6 +204,7 @@ export class GameRoom extends DurableObject<Env> {
 
     try {
       const message = parseMessage(rawMessage);
+      let playEvent: RoomPlayEvent | null = null;
       switch (message.type) {
         case 'add-bot':
           this.room.addBot(attachment.sessionId, message.seat);
@@ -202,7 +222,7 @@ export class GameRoom extends DurableObject<Env> {
           this.room.startNextDeal(attachment.sessionId);
           break;
         case 'play':
-          this.room.play(attachment.sessionId, message.cardIds, message.description);
+          playEvent = this.room.play(attachment.sessionId, message.cardIds, message.description);
           break;
         case 'pass':
           this.room.pass(attachment.sessionId);
@@ -225,6 +245,9 @@ export class GameRoom extends DurableObject<Env> {
             }));
           });
           return;
+      }
+      if (playEvent !== null) {
+        this.broadcastPlayEvent(playEvent);
       }
       this.runBotsUntilHuman();
       await this.persist();
@@ -260,7 +283,7 @@ export class GameRoom extends DurableObject<Env> {
     }
     const now = Date.now();
     this.room.applyDisconnectTimeouts(now);
-    this.room.applyTurnTimeout(now);
+    this.room.applyTurnTimeout(now, (event) => this.broadcastPlayEvent(event));
     this.runBotsUntilHuman();
     await this.persist();
     await this.syncAlarm();

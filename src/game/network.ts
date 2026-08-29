@@ -1,4 +1,4 @@
-import type { JoinReceipt, RoomView } from './room';
+import type { JoinReceipt, RoomPlayEvent, RoomView } from './room';
 import type { Seat } from './rules/match';
 import type { TimerChoice } from './types';
 
@@ -18,7 +18,12 @@ export type OutgoingMessage =
 interface ConnectionHandlers {
   onError: (message: string) => void;
   onJoined: (receipt: JoinReceipt, view: RoomView) => void;
+  onPlayEvent: (event: NetworkPlayEvent) => void;
   onState: (view: RoomView) => void;
+}
+
+export interface NetworkPlayEvent extends RoomPlayEvent {
+  id: string;
 }
 
 interface ConnectOptions extends ConnectionHandlers {
@@ -29,8 +34,9 @@ interface ConnectOptions extends ConnectionHandlers {
 
 interface ServerMessage {
   message?: string;
+  event?: NetworkPlayEvent;
   receipt?: JoinReceipt;
-  type: 'error' | 'joined' | 'quick-message' | 'state';
+  type: 'error' | 'joined' | 'play-event' | 'quick-message' | 'state';
   view?: RoomView;
 }
 
@@ -85,6 +91,10 @@ export function connectRoom(options: ConnectOptions): Promise<LiveRoomConnection
       }
       if (message.type === 'state' && message.view !== undefined) {
         options.onState(message.view);
+        return;
+      }
+      if (message.type === 'play-event' && message.event !== undefined) {
+        options.onPlayEvent(message.event);
         return;
       }
       if (message.type === 'error') {

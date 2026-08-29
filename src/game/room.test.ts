@@ -129,9 +129,10 @@ describe('authoritative room engine', () => {
     const selectedCard = room.getView(leader.sessionId).hand[0];
 
     expect(() => room.play(other.sessionId, [selectedCard.id])).toThrow(/不完全属于/);
-    room.play(leader.sessionId, [selectedCard.id]);
+    const playEvent = room.play(leader.sessionId, [selectedCard.id]);
 
     const publicView = room.getView(other.sessionId);
+    expect(playEvent).toMatchObject({ cards: [selectedCard], player: leaderSeat });
     expect(publicView.lastPlay?.cards).toEqual([selectedCard]);
     expect(room.getView(leader.sessionId).hand).toHaveLength(26);
   });
@@ -183,8 +184,9 @@ describe('authoritative room engine', () => {
     room.addBot(host.sessionId, 3);
     room.start(host.sessionId);
 
+    const botPlayEvents: Array<{ player: number }> = [];
     let botTurns = 0;
-    while (room.runCurrentBotTurn()) {
+    while (room.runCurrentBotTurn((event) => botPlayEvents.push(event))) {
       botTurns += 1;
       if (botTurns > 100) {
         throw new Error('机器人回合未能停止');
@@ -193,6 +195,7 @@ describe('authoritative room engine', () => {
 
     const view = room.getView(host.sessionId);
     expect(view.phase === 'complete' || view.currentSeat === host.seat).toBe(true);
+    expect(botPlayEvents.every((event) => event.player !== host.seat)).toBe(true);
   });
 
   it('transfers a disconnected lobby host after 120 seconds', () => {

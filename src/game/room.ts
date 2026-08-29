@@ -74,6 +74,12 @@ export interface RoomPlayerView {
   seat: Seat;
 }
 
+export interface RoomPlayEvent {
+  cards: CardData[];
+  description: string;
+  player: Seat;
+}
+
 export interface RoomView {
   currentSeat: Seat | null;
   finishOrder: Seat[];
@@ -398,7 +404,7 @@ export class RoomEngine {
     this.applyTributeTransition(transition, now);
   }
 
-  play(sessionId: string, cardIds: string[], description?: string, now = Date.now()): void {
+  play(sessionId: string, cardIds: string[], description?: string, now = Date.now()): RoomPlayEvent {
     if (this.phase !== 'playing' || this.trick === null) {
       throw new Error('牌局当前不能出牌');
     }
@@ -442,6 +448,11 @@ export class RoomEngine {
       this.phase = 'complete';
     }
     this.refreshTurnDeadline(now);
+    return {
+      cards: [...cards],
+      description: play.description,
+      player: member.seat,
+    };
   }
 
   pass(sessionId: string, now = Date.now()): void {
@@ -457,7 +468,7 @@ export class RoomEngine {
     this.refreshTurnDeadline(now);
   }
 
-  runCurrentBotTurn(): boolean {
+  runCurrentBotTurn(onPlay?: (event: RoomPlayEvent) => void): boolean {
     if (this.getPause() !== null) {
       return false;
     }
@@ -484,11 +495,12 @@ export class RoomEngine {
     if (action.type === 'pass') {
       this.pass(member.id);
     } else {
-      this.play(
+      const event = this.play(
         member.id,
         action.play.cards.map((card) => card.id),
         action.play.description,
       );
+      onPlay?.(event);
     }
     return true;
   }
@@ -621,7 +633,7 @@ export class RoomEngine {
     return this.getPause() === null ? this.turnDeadline : null;
   }
 
-  applyTurnTimeout(now = Date.now()): boolean {
+  applyTurnTimeout(now = Date.now(), onPlay?: (event: RoomPlayEvent) => void): boolean {
     if (
       this.phase !== 'playing'
       || this.trick === null
@@ -654,7 +666,8 @@ export class RoomEngine {
     if (play === undefined) {
       throw new Error('超时后无法找到可首出的最小单张');
     }
-    this.play(member.id, [choice.id], play.description, now);
+    const event = this.play(member.id, [choice.id], play.description, now);
+    onPlay?.(event);
     return true;
   }
 

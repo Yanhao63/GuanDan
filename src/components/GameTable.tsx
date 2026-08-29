@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { sortDemoHand } from '../game/demoCards';
 import { classifyPlay } from '../game/rules/classify';
+import type { NetworkPlayEvent } from '../game/network';
 import type { RoomPlayerView, RoomView, TributeAction } from '../game/room';
 import type { Seat } from '../game/rules/match';
 import type { PlayInterpretation } from '../game/rules/types';
@@ -9,14 +10,17 @@ import { DealResultOverlay } from './DealResultOverlay';
 import { PlayerSeat } from './PlayerSeat';
 import { PokerCard } from './PokerCard';
 import { QuickChatDrawer } from './QuickChatDrawer';
+import { DirectionalPlay, getTableDirection, TurnIndicator } from './TableActivity';
 import { TopHud } from './TopHud';
 import { TributeOverlay } from './TributeOverlay';
 import { WildcardModal } from './WildcardModal';
 
 interface GameTableProps {
+  activePlayEvent: NetworkPlayEvent | null;
   notice?: string;
   onPass: () => void;
   onPlay: (cardIds: string[], description: string) => void;
+  onPlayAnimationComplete: () => void;
   onQuickMessage: (message: string) => void;
   onNextDeal: () => void;
   onTributeAction: (action: Exclude<TributeAction, 'waiting'>, cardId: string) => void;
@@ -37,10 +41,12 @@ function playerAt(view: RoomView, seat: Seat): RoomPlayerView {
 }
 
 export function GameTable({
+  activePlayEvent,
   notice = '',
   onNextDeal,
   onPass,
   onPlay,
+  onPlayAnimationComplete,
   onQuickMessage,
   onTributeAction,
   reconnectCode,
@@ -58,14 +64,17 @@ export function GameTable({
   const leftPlayer = playerAt(view, relativeSeat(view.selfSeat, 3));
   const rightPlayer = playerAt(view, relativeSeat(view.selfSeat, 1));
   const selfPlayer = playerAt(view, view.selfSeat);
+  const currentPlayer = view.currentSeat === null ? null : playerAt(view, view.currentSeat);
+  const currentDirection = currentPlayer === null
+    ? null
+    : getTableDirection(view.selfSeat, currentPlayer.seat);
   const pausedPlayer = view.pause === null ? null : playerAt(view, view.pause.seat);
   const isSelfTurn = view.pause === null && view.currentSeat === view.selfSeat;
   const tableMessage = notice.length > 0
     ? notice
     : localMessage.length > 0
       ? localMessage
-      : view.lastPlay?.description ?? '等待首出';
-  const playedCards = view.lastPlay?.cards ?? [];
+      : activePlayEvent?.description ?? view.lastPlay?.description ?? '等待首出';
 
   const selectedCards = useMemo(
     () => hand.filter((card) => selectedIds.includes(card.id)),
@@ -127,27 +136,30 @@ export function GameTable({
         <PlayerSeat cardCount={rightPlayer.cardCount ?? undefined} isActive={view.pause === null && view.currentSeat === rightPlayer.seat} name={rightPlayer.nickname} position="right" status={rightPlayer.controlledByBot ? '机器人接管中' : rightPlayer.connected ? '牌局进行中' : '等待重连'} />
 
         <div className="table-center">
+          {currentPlayer !== null && currentDirection !== null ? (
+            <TurnIndicator direction={currentDirection} nickname={currentPlayer.nickname} />
+          ) : null}
           <div className="round-state">
             <span>本轮牌面</span>
             <strong>{tableMessage}</strong>
           </div>
           <div className="played-cards">
-            {playedCards.length > 0 ? playedCards.map((card, index) => (
-              <div className="played-card" key={card.id} style={{ transform: `translateX(${index * 34}px) rotate(${(index - 1) * 2}deg)` }}>
-                <PokerCard card={card} index={index} onToggle={() => undefined} selected={false} />
-              </div>
-            )) : (
-              <div className="table-seal" aria-hidden="true"><span>贯</span><small>以牌会友</small></div>
-            )}
+            <DirectionalPlay
+              activeEvent={activePlayEvent}
+              fallbackPlay={view.lastPlay}
+              onAnimationComplete={onPlayAnimationComplete}
+              selfSeat={view.selfSeat}
+            />
           </div>
         </div>
 
-        <section className="self-area">
+        <section className={`self-area${isSelfTurn ? ' self-area-active' : ''}`}>
           {speech !== null ? <div className="speech-bubble">{speech}</div> : null}
           <div className="self-status">
             <div className="self-avatar">{selfPlayer.nickname.slice(0, 1)}</div>
             <div><strong>{selfPlayer.nickname}</strong><span>{selfPlayer.isHost ? '本家 · 房主' : '本家'}</span></div>
             <span className="hand-count">{hand.length} 张</span>
+            {isSelfTurn ? <span className="self-turn-tag">当前出牌</span> : null}
           </div>
 
           <div className="action-bar">

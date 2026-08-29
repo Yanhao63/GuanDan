@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EntryScreen } from './components/EntryScreen';
 import { GameTable } from './components/GameTable';
 import { LobbyScreen } from './components/LobbyScreen';
@@ -6,6 +6,7 @@ import {
   connectRoom,
   createRoom,
   type LiveRoomConnection,
+  type NetworkPlayEvent,
   type OutgoingMessage,
 } from './game/network';
 import type { JoinReceipt, RoomView } from './game/room';
@@ -34,6 +35,7 @@ export function App() {
   const connectionRef = useRef<LiveRoomConnection | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [playEvents, setPlayEvents] = useState<NetworkPlayEvent[]>([]);
   const [reconnectCode, setReconnectCode] = useState('');
   const [view, setView] = useState<RoomView | null>(null);
 
@@ -59,6 +61,7 @@ export function App() {
   const openConnection = async (nickname: string, roomCode: string, reconnect?: string) => {
     setBusy(true);
     setMessage('');
+    setPlayEvents([]);
     connectionRef.current?.close();
     try {
       const connection = await connectRoom({
@@ -75,6 +78,9 @@ export function App() {
           setReconnectCode(receipt.reconnectCode);
           setView(initialView);
           setMessage('');
+        },
+        onPlayEvent: (event) => {
+          setPlayEvents((current) => [...current, event].slice(-24));
         },
         onState: (nextView) => {
           setView(nextView);
@@ -112,6 +118,10 @@ export function App() {
   const handleReconnect = (roomCode: string, reconnectCode: string) => {
     void openConnection('', roomCode, reconnectCode);
   };
+
+  const consumePlayEvent = useCallback(() => {
+    setPlayEvents((current) => current.slice(1));
+  }, []);
 
   if (view === null) {
     return (
@@ -152,9 +162,11 @@ export function App() {
 
   return (
     <GameTable
+      activePlayEvent={playEvents[0] ?? null}
       notice={message}
       onNextDeal={() => send({ type: 'start-next-deal' })}
       onPass={() => send({ type: 'pass' })}
+      onPlayAnimationComplete={consumePlayEvent}
       onPlay={(cardIds, description) => send({ cardIds, description, type: 'play' })}
       onQuickMessage={(quickMessage) => send({ message: quickMessage, type: 'quick-message' })}
       onTributeAction={(action, cardId) => send({ cardId, type: action })}

@@ -36,7 +36,7 @@ export function PlayerSeat({
         <img alt="" src="/assets/cards/card-back.png" />
         {cardCount === undefined ? <span>十张以上</span> : <span>{cardCount} 张</span>}
       </div>
-      {isActive ? <div className="turn-badge"><Icon name="rotate" size={15} /> 当前回合</div> : null}
+      {isActive ? <div className="turn-badge"><Icon name="rotate" size={15} /> 当前出牌</div> : null}
     </section>
   );
 }
