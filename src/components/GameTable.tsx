@@ -118,6 +118,7 @@ export function GameTable({
         roomCode={view.roomCode}
         selfSeat={view.selfSeat}
         timerLabel={view.timer}
+        turnDeadline={view.turnDeadline}
       />
 
       <div className="table-canvas">

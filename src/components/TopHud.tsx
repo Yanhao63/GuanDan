@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getTeamForSeat, type MatchProgress, type Seat } from '../game/rules/match';
 import { Icon } from '../ui/Icon';
 
@@ -9,6 +9,7 @@ interface TopHudProps {
   roomCode: string;
   selfSeat: Seat;
   timerLabel: string;
+  turnDeadline: number | null;
 }
 
 interface AudioState {
@@ -17,14 +18,34 @@ interface AudioState {
   voice: number;
 }
 
-export function TopHud({ level, progress, reconnectCode, roomCode, selfSeat, timerLabel }: TopHudProps) {
+export function TopHud({
+  level,
+  progress,
+  reconnectCode,
+  roomCode,
+  selfSeat,
+  timerLabel,
+  turnDeadline,
+}: TopHudProps) {
   const [showAudio, setShowAudio] = useState(false);
   const [showRoomSettings, setShowRoomSettings] = useState(false);
   const [audio, setAudio] = useState<AudioState>({ bgm: 35, effects: 70, voice: 65 });
+  const [now, setNow] = useState(() => Date.now());
   const selfTeam = getTeamForSeat(selfSeat);
   const opponentTeam = selfTeam === 'team-a' ? 'team-b' : 'team-a';
   const selfProgress = progress[selfTeam];
   const opponentProgress = progress[opponentTeam];
+  const remainingSeconds = turnDeadline === null
+    ? null
+    : Math.max(0, Math.ceil((turnDeadline - now) / 1_000));
+
+  useEffect(() => {
+    if (turnDeadline === null) {
+      return undefined;
+    }
+    const interval = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(interval);
+  }, [turnDeadline]);
 
   const setVolume = (key: keyof AudioState, value: number) => {
     setAudio((current) => ({ ...current, [key]: value }));
@@ -47,7 +68,9 @@ export function TopHud({ level, progress, reconnectCode, roomCode, selfSeat, tim
       </div>
       <div className="hud-spacer" />
       <div className="direction-chip"><Icon name="rotate" size={18} /> 逆时针</div>
-      <div className="timer-chip">{timerLabel}</div>
+      <div aria-live="polite" className="timer-chip">
+        {remainingSeconds === null ? timerLabel : `剩余 ${remainingSeconds} 秒`}
+      </div>
       <button aria-expanded={showAudio} aria-label="声音设置" className="hud-icon-button" onClick={() => setShowAudio((open) => !open)} type="button">
         <Icon name="audio" />
       </button>

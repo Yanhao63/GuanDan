@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RoomEngine } from './room';
+import { getRankStrength } from './rules/ranks';
 import { DISCONNECT_GRACE_MS } from './rules/timing';
 
 function seededRandom(seed: number): () => number {
@@ -47,6 +48,57 @@ describe('authoritative room engine', () => {
     room.start(host.sessionId);
 
     expect(room.getView(host.sessionId)).toMatchObject({ phase: 'playing', timer: '60秒' });
+  });
+
+  it('applies the configured turn timeout on the authoritative clock', () => {
+    const room = new RoomEngine('123456', () => 0, tokenSource());
+    const receipts = ['甲', '乙', '丙', '丁'].map((name) => room.joinHuman(name));
+    room.setTimer(receipts[0].sessionId, '30秒');
+    room.start(receipts[0].sessionId, 1_000);
+
+    const openingView = room.getView(receipts[0].sessionId);
+    expect(openingView.currentSeat).toBe(0);
+    expect(openingView.turnDeadline).toBe(31_000);
+    const expectedSmallest = openingView.hand.reduce((smallest, card) => (
+      getRankStrength(card.rank, openingView.level) < getRankStrength(smallest.rank, openingView.level)
+        ? card
+        : smallest
+    ));
+
+    expect(room.applyTurnTimeout(30_999)).toBe(false);
+    expect(() => room.play(receipts[0].sessionId, [openingView.hand[0].id], undefined, 31_000))
+      .toThrow(/超时/);
+    expect(room.applyTurnTimeout(31_000)).toBe(true);
+
+    const afterOpeningTimeout = room.getView(receipts[0].sessionId);
+    expect(afterOpeningTimeout.hand).toHaveLength(26);
+    expect(afterOpeningTimeout.lastPlay).toMatchObject({
+      cards: [expectedSmallest],
+      player: 0,
+    });
+    expect(afterOpeningTimeout.currentSeat).toBe(1);
+    expect(afterOpeningTimeout.turnDeadline).toBe(61_000);
+
+    expect(room.applyTurnTimeout(61_000)).toBe(true);
+    const afterFollowTimeout = room.getView(receipts[1].sessionId);
+    expect(afterFollowTimeout.hand).toHaveLength(27);
+    expect(afterFollowTimeout.currentSeat).toBe(2);
+    expect(afterFollowTimeout.turnDeadline).toBe(91_000);
+  });
+
+  it('stops the turn clock while paused and restarts it after reconnection', () => {
+    const room = new RoomEngine('123456', () => 0, tokenSource());
+    const receipts = ['甲', '乙', '丙', '丁'].map((name) => room.joinHuman(name));
+    room.setTimer(receipts[0].sessionId, '60秒');
+    room.start(receipts[0].sessionId, 1_000);
+    expect(room.getNextTurnDeadline()).toBe(61_000);
+
+    room.disconnect(receipts[0].sessionId, 5_000);
+    expect(room.getNextTurnDeadline()).toBeNull();
+
+    room.reconnect(receipts[0].reconnectCode);
+    room.attachConnection(receipts[0].sessionId, 'connection-returned', 10_000);
+    expect(room.getNextTurnDeadline()).toBe(70_000);
   });
 
   it('deals 27 cards while hiding opponents exact counts above ten', () => {

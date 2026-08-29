@@ -75,13 +75,16 @@ export class GameRoom extends DurableObject<Env> {
     }
   }
 
-  private async syncDisconnectAlarm(): Promise<void> {
-    const deadline = this.room?.getNextDisconnectDeadline() ?? null;
-    if (deadline === null) {
+  private async syncAlarm(): Promise<void> {
+    const deadlines = [
+      this.room?.getNextDisconnectDeadline() ?? null,
+      this.room?.getNextTurnDeadline() ?? null,
+    ].filter((deadline): deadline is number => deadline !== null);
+    if (deadlines.length === 0) {
       await this.ctx.storage.deleteAlarm();
       return;
     }
-    await this.ctx.storage.setAlarm(Math.max(deadline, Date.now() + 1));
+    await this.ctx.storage.setAlarm(Math.max(Math.min(...deadlines), Date.now() + 1));
   }
 
   private sendView(ws: WebSocket): void {
@@ -165,7 +168,7 @@ export class GameRoom extends DurableObject<Env> {
     server.serializeAttachment({ connectionId, sessionId: receipt.sessionId } satisfies ConnectionAttachment);
     this.runBotsUntilHuman();
     await this.persist();
-    await this.syncDisconnectAlarm();
+    await this.syncAlarm();
     server.send(JSON.stringify({ type: 'joined', receipt, view: this.room.getView(receipt.sessionId) }));
     this.broadcastViews();
 
@@ -225,7 +228,7 @@ export class GameRoom extends DurableObject<Env> {
       }
       this.runBotsUntilHuman();
       await this.persist();
-      await this.syncDisconnectAlarm();
+      await this.syncAlarm();
       this.broadcastViews();
     } catch (error) {
       ws.send(JSON.stringify({
@@ -241,7 +244,7 @@ export class GameRoom extends DurableObject<Env> {
     if (attachment !== null && this.room !== null) {
       this.room.disconnect(attachment.sessionId, Date.now(), attachment.connectionId);
       await this.persist();
-      await this.syncDisconnectAlarm();
+      await this.syncAlarm();
       this.broadcastViews();
     }
   }
@@ -255,10 +258,12 @@ export class GameRoom extends DurableObject<Env> {
     if (this.room === null) {
       return;
     }
-    this.room.applyDisconnectTimeouts(Date.now());
+    const now = Date.now();
+    this.room.applyDisconnectTimeouts(now);
+    this.room.applyTurnTimeout(now);
     this.runBotsUntilHuman();
     await this.persist();
-    await this.syncDisconnectAlarm();
+    await this.syncAlarm();
     this.broadcastViews();
   }
 }

@@ -9,7 +9,11 @@ import {
 } from './rules/match';
 import { getRankStrength } from './rules/ranks';
 import { createTrickState, submitPass, submitPlay, type TrickState } from './rules/trick';
-import { DISCONNECT_GRACE_MS, getPublicCardCount } from './rules/timing';
+import {
+  DISCONNECT_GRACE_MS,
+  getPublicCardCount,
+  getTurnDurationMs,
+} from './rules/timing';
 import {
   beginTributeRound,
   chooseDoubleTribute,
@@ -49,6 +53,7 @@ export interface RoomSnapshot {
   timer: TimerChoice;
   trick: TrickState | null;
   settlement?: DealSettlement | null;
+  turnDeadline?: number | null;
   tribute?: TributeRoundState | null;
 }
 
@@ -90,6 +95,7 @@ export interface RoomView {
   selfSeat: Seat;
   settlement: DealSettlement | null;
   timer: TimerChoice;
+  turnDeadline: number | null;
   tribute: TributeView | null;
 }
 
@@ -136,6 +142,7 @@ export class RoomEngine {
   private settlement: DealSettlement | null = null;
   private timer: TimerChoice = '不限时';
   private trick: TrickState | null = null;
+  private turnDeadline: number | null = null;
   private tribute: TributeRoundState | null = null;
 
   constructor(
@@ -162,7 +169,11 @@ export class RoomEngine {
     room.settlement = structuredClone(snapshot.settlement ?? null);
     room.timer = snapshot.timer;
     room.trick = structuredClone(snapshot.trick);
+    room.turnDeadline = snapshot.turnDeadline ?? null;
     room.tribute = structuredClone(snapshot.tribute ?? null);
+    if (snapshot.turnDeadline === undefined) {
+      room.refreshTurnDeadline();
+    }
     return room;
   }
 
@@ -242,7 +253,7 @@ export class RoomEngine {
     return this.makeReceipt(member);
   }
 
-  attachConnection(sessionId: string, connectionId: string): void {
+  attachConnection(sessionId: string, connectionId: string, now = Date.now()): void {
     const member = this.getMember(sessionId);
     if (member.kind !== 'human') {
       throw new Error('机器人不需要网络连接');
@@ -251,6 +262,7 @@ export class RoomEngine {
     member.connectionId = connectionId;
     member.controlledByBot = false;
     member.disconnectedAt = null;
+    this.refreshTurnDeadline(now);
   }
 
   disconnect(sessionId: string, disconnectedAt = Date.now(), connectionId?: string): void {
@@ -262,6 +274,9 @@ export class RoomEngine {
       member.connected = false;
       member.connectionId = null;
       member.disconnectedAt = disconnectedAt;
+      if (member.isHost || this.trick?.currentSeat === member.seat) {
+        this.turnDeadline = null;
+      }
     }
   }
 
@@ -301,7 +316,7 @@ export class RoomEngine {
     this.timer = timer;
   }
 
-  start(hostSessionId: string): void {
+  start(hostSessionId: string, now = Date.now()): void {
     this.requireLobby();
     this.requireHost(hostSessionId);
     if (this.members.some((member) => member === null)) {
@@ -322,9 +337,10 @@ export class RoomEngine {
     this.settlement = null;
     this.tribute = null;
     this.phase = 'playing';
+    this.refreshTurnDeadline(now);
   }
 
-  startNextDeal(hostSessionId: string): void {
+  startNextDeal(hostSessionId: string, now = Date.now()): void {
     this.requireHost(hostSessionId);
     if (this.phase !== 'complete' || this.trick === null || this.settlement === null) {
       throw new Error('当前还不能开始下一副');
@@ -343,10 +359,10 @@ export class RoomEngine {
     this.settlement = null;
     this.tribute = beginTributeRound(finishOrder, hands, this.level);
     this.phase = 'tribute';
-    this.finishTributeIfReady();
+    this.finishTributeIfReady(now);
   }
 
-  payTribute(sessionId: string, cardId: string): void {
+  payTribute(sessionId: string, cardId: string, now = Date.now()): void {
     this.requireTributePhase();
     const member = this.getMember(sessionId);
     const transition = submitTribute(
@@ -355,10 +371,10 @@ export class RoomEngine {
       member.seat,
       cardId,
     );
-    this.applyTributeTransition(transition);
+    this.applyTributeTransition(transition, now);
   }
 
-  chooseDoubleTribute(sessionId: string, cardId: string): void {
+  chooseDoubleTribute(sessionId: string, cardId: string, now = Date.now()): void {
     this.requireTributePhase();
     const member = this.getMember(sessionId);
     const transition = chooseDoubleTribute(
@@ -367,10 +383,10 @@ export class RoomEngine {
       member.seat,
       cardId,
     );
-    this.applyTributeTransition(transition);
+    this.applyTributeTransition(transition, now);
   }
 
-  returnTribute(sessionId: string, cardId: string): void {
+  returnTribute(sessionId: string, cardId: string, now = Date.now()): void {
     this.requireTributePhase();
     const member = this.getMember(sessionId);
     const transition = submitReturnCard(
@@ -379,10 +395,10 @@ export class RoomEngine {
       member.seat,
       cardId,
     );
-    this.applyTributeTransition(transition);
+    this.applyTributeTransition(transition, now);
   }
 
-  play(sessionId: string, cardIds: string[], description?: string): void {
+  play(sessionId: string, cardIds: string[], description?: string, now = Date.now()): void {
     if (this.phase !== 'playing' || this.trick === null) {
       throw new Error('牌局当前不能出牌');
     }
@@ -390,6 +406,7 @@ export class RoomEngine {
       throw new Error('牌局正在等待掉线玩家重连');
     }
     const member = this.getMember(sessionId);
+    this.requireUnexpiredTurn(member, now);
     if (new Set(cardIds).size !== cardIds.length) {
       throw new Error('不能重复提交同一张牌');
     }
@@ -424,9 +441,10 @@ export class RoomEngine {
       this.tribute = null;
       this.phase = 'complete';
     }
+    this.refreshTurnDeadline(now);
   }
 
-  pass(sessionId: string): void {
+  pass(sessionId: string, now = Date.now()): void {
     if (this.phase !== 'playing' || this.trick === null) {
       throw new Error('牌局当前不能选择不要');
     }
@@ -434,7 +452,9 @@ export class RoomEngine {
       throw new Error('牌局正在等待掉线玩家重连');
     }
     const member = this.getMember(sessionId);
+    this.requireUnexpiredTurn(member, now);
     this.trick = submitPass(this.trick, member.seat).state;
+    this.refreshTurnDeadline(now);
   }
 
   runCurrentBotTurn(): boolean {
@@ -503,6 +523,7 @@ export class RoomEngine {
       selfSeat: self.seat,
       settlement: structuredClone(this.settlement),
       timer: this.timer,
+      turnDeadline: this.turnDeadline,
       tribute: this.getTributeView(self),
     };
   }
@@ -521,6 +542,7 @@ export class RoomEngine {
       settlement: structuredClone(this.settlement),
       timer: this.timer,
       trick: structuredClone(this.trick),
+      turnDeadline: this.turnDeadline,
       tribute: structuredClone(this.tribute),
     };
   }
@@ -593,6 +615,47 @@ export class RoomEngine {
         : [];
     });
     return deadlines.length === 0 ? null : Math.min(...deadlines);
+  }
+
+  getNextTurnDeadline(): number | null {
+    return this.getPause() === null ? this.turnDeadline : null;
+  }
+
+  applyTurnTimeout(now = Date.now()): boolean {
+    if (
+      this.phase !== 'playing'
+      || this.trick === null
+      || this.trick.currentSeat === null
+      || this.turnDeadline === null
+      || now < this.turnDeadline
+      || this.getPause() !== null
+    ) {
+      return false;
+    }
+
+    const member = this.members[this.trick.currentSeat];
+    if (member === null || member.kind !== 'human' || member.controlledByBot) {
+      this.turnDeadline = null;
+      return false;
+    }
+
+    this.turnDeadline = null;
+    if (this.trick.lastPlay !== null) {
+      this.pass(member.id, now);
+      return true;
+    }
+
+    const choice = member.hand.reduce((smallest, card) => (
+      getRankStrength(card.rank, this.level) < getRankStrength(smallest.rank, this.level)
+        ? card
+        : smallest
+    ));
+    const play = classifyPlay([choice], this.level)[0];
+    if (play === undefined) {
+      throw new Error('超时后无法找到可首出的最小单张');
+    }
+    this.play(member.id, [choice.id], play.description, now);
+    return true;
   }
 
   private getPause(): RoomView['pause'] {
@@ -669,13 +732,13 @@ export class RoomEngine {
     }
   }
 
-  private applyTributeTransition(transition: TributeTransition): void {
+  private applyTributeTransition(transition: TributeTransition, now: number): void {
     this.applyHands(transition.hands);
     this.tribute = transition.state;
-    this.finishTributeIfReady();
+    this.finishTributeIfReady(now);
   }
 
-  private finishTributeIfReady(): void {
+  private finishTributeIfReady(now: number): void {
     if (this.tribute?.phase !== 'complete') {
       return;
     }
@@ -684,6 +747,40 @@ export class RoomEngine {
     }
     this.trick = createTrickState(this.tribute.leader);
     this.phase = 'playing';
+    this.refreshTurnDeadline(now);
+  }
+
+  private refreshTurnDeadline(now = Date.now()): void {
+    const duration = getTurnDurationMs(this.timer);
+    if (
+      duration === null
+      || this.phase !== 'playing'
+      || this.trick === null
+      || this.trick.currentSeat === null
+      || this.getPause() !== null
+    ) {
+      this.turnDeadline = null;
+      return;
+    }
+
+    const member = this.members[this.trick.currentSeat];
+    this.turnDeadline = member !== null
+      && member.kind === 'human'
+      && member.connected
+      && !member.controlledByBot
+      ? now + duration
+      : null;
+  }
+
+  private requireUnexpiredTurn(member: RoomMemberState, now: number): void {
+    if (
+      member.kind === 'human'
+      && !member.controlledByBot
+      && this.turnDeadline !== null
+      && now >= this.turnDeadline
+    ) {
+      throw new Error('当前回合已经超时');
+    }
   }
 
   private getPendingTributeSeats(): Seat[] {
