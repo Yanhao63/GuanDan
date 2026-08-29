@@ -202,6 +202,7 @@ button:focus-visible, input:focus-visible {
 .audio-popover strong { font: 700 20px STSong, serif; }
 .audio-popover label { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
 .audio-popover input { accent-color: var(--brass-bright); }
+.audio-popover small { color: var(--muted); font-size: 11px; text-align: center; }
 
 .table-canvas { position: absolute; inset: 8.2% 0 0; overflow: hidden; }
 .table-canvas::before { position: absolute; inset: 0; content: ''; background: radial-gradient(ellipse at center, transparent 34%, #02130f4d 78%, #080504b3 100%); pointer-events: none; }

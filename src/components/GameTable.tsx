@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { gameAudio, loadAudioSettings, type AudioSettings } from '../audio/gameAudio';
 import { sortDemoHand } from '../game/demoCards';
 import { classifyPlay } from '../game/rules/classify';
 import type { NetworkPlayEvent, NetworkQuickMessage } from '../game/network';
@@ -80,6 +81,7 @@ export function GameTable({
   view,
 }: GameTableProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [audio, setAudio] = useState<AudioSettings>(loadAudioSettings);
   const [showChat, setShowChat] = useState(false);
   const [showWildcard, setShowWildcard] = useState(false);
   const [wildcardOptions, setWildcardOptions] = useState<PlayInterpretation[]>([]);
@@ -106,6 +108,28 @@ export function GameTable({
     () => hand.filter((card) => selectedIds.includes(card.id)),
     [hand, selectedIds],
   );
+
+  useEffect(() => {
+    gameAudio.configure(audio);
+  }, [audio]);
+
+  useEffect(() => {
+    if (activePlayEvent === null) {
+      return;
+    }
+    gameAudio.playEffect('play');
+    gameAudio.announce(activePlayEvent.description);
+  }, [activePlayEvent?.id]);
+
+  useEffect(() => {
+    if (isSelfTurn) {
+      gameAudio.playEffect('turn');
+    }
+  }, [isSelfTurn]);
+
+  const changeAudio = (key: keyof AudioSettings, value: number) => {
+    setAudio((current) => ({ ...current, [key]: value }));
+  };
 
   const toggleCard = (cardId: string) => {
     setSelectedIds((current) => current.includes(cardId) ? current.filter((id) => id !== cardId) : [...current, cardId]);
@@ -144,8 +168,9 @@ export function GameTable({
   };
 
   return (
-    <main className="game-screen">
+    <main className="game-screen" onPointerDown={() => { void gameAudio.unlock(); }}>
       <TopHud
+        audio={audio}
         level={view.level}
         progress={view.progress}
         reconnectCode={reconnectCode}
@@ -153,6 +178,7 @@ export function GameTable({
         selfSeat={view.selfSeat}
         timerLabel={view.timer}
         turnDeadline={view.turnDeadline}
+        onAudioChange={changeAudio}
       />
 
       <div className="table-canvas">

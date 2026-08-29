@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import type { AudioSettings } from '../audio/gameAudio';
 import { getTeamForSeat, type MatchProgress, type Seat } from '../game/rules/match';
 import { Icon } from '../ui/Icon';
 
 interface TopHudProps {
+  audio: AudioSettings;
   level: string;
   progress: MatchProgress;
   reconnectCode: string;
@@ -10,15 +12,11 @@ interface TopHudProps {
   selfSeat: Seat;
   timerLabel: string;
   turnDeadline: number | null;
-}
-
-interface AudioState {
-  bgm: number;
-  effects: number;
-  voice: number;
+  onAudioChange: (key: keyof AudioSettings, value: number) => void;
 }
 
 export function TopHud({
+  audio,
   level,
   progress,
   reconnectCode,
@@ -26,10 +24,10 @@ export function TopHud({
   selfSeat,
   timerLabel,
   turnDeadline,
+  onAudioChange,
 }: TopHudProps) {
   const [showAudio, setShowAudio] = useState(false);
   const [showRoomSettings, setShowRoomSettings] = useState(false);
-  const [audio, setAudio] = useState<AudioState>({ bgm: 35, effects: 70, voice: 65 });
   const [now, setNow] = useState(() => Date.now());
   const selfTeam = getTeamForSeat(selfSeat);
   const opponentTeam = selfTeam === 'team-a' ? 'team-b' : 'team-a';
@@ -46,10 +44,6 @@ export function TopHud({
     const interval = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(interval);
   }, [turnDeadline]);
-
-  const setVolume = (key: keyof AudioState, value: number) => {
-    setAudio((current) => ({ ...current, [key]: value }));
-  };
 
   const copyReconnectCode = async () => {
     await navigator.clipboard?.writeText(reconnectCode);
@@ -79,9 +73,10 @@ export function TopHud({
       {showAudio ? (
         <section className="audio-popover" aria-label="声音设置">
           <strong>声音设置</strong>
-          <label>背景音乐 <input max="100" min="0" onChange={(event) => setVolume('bgm', Number(event.target.value))} type="range" value={audio.bgm} /></label>
-          <label>出牌音效 <input max="100" min="0" onChange={(event) => setVolume('effects', Number(event.target.value))} type="range" value={audio.effects} /></label>
-          <label>女声播报 <input max="100" min="0" onChange={(event) => setVolume('voice', Number(event.target.value))} type="range" value={audio.voice} /></label>
+          <label>背景音乐 <input aria-label="背景音乐音量" max="100" min="0" onChange={(event) => onAudioChange('bgm', Number(event.target.value))} type="range" value={audio.bgm} /></label>
+          <label>出牌音效 <input aria-label="出牌音效音量" max="100" min="0" onChange={(event) => onAudioChange('effects', Number(event.target.value))} type="range" value={audio.effects} /></label>
+          <label>女声播报 <input aria-label="女声播报音量" max="100" min="0" onChange={(event) => onAudioChange('voice', Number(event.target.value))} type="range" value={audio.voice} /></label>
+          <small>首次点击牌桌后启用声音</small>
         </section>
       ) : null}
       {showRoomSettings ? (
