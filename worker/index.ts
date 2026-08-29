@@ -18,8 +18,12 @@ type ClientMessage =
   | { seat: Seat; type: 'remove-bot' }
   | { timer: TimerChoice; type: 'set-timer' }
   | { type: 'start' }
+  | { type: 'start-next-deal' }
   | { cardIds: string[]; description?: string; type: 'play' }
   | { type: 'pass' }
+  | { cardId: string; type: 'pay-tribute' }
+  | { cardId: string; type: 'choose-double-tribute' }
+  | { cardId: string; type: 'return-tribute' }
   | { message: string; type: 'quick-message' };
 
 function secureRandom(): number {
@@ -191,11 +195,23 @@ export class GameRoom extends DurableObject<Env> {
         case 'start':
           this.room.start(attachment.sessionId);
           break;
+        case 'start-next-deal':
+          this.room.startNextDeal(attachment.sessionId);
+          break;
         case 'play':
           this.room.play(attachment.sessionId, message.cardIds, message.description);
           break;
         case 'pass':
           this.room.pass(attachment.sessionId);
+          break;
+        case 'pay-tribute':
+          this.room.payTribute(attachment.sessionId, message.cardId);
+          break;
+        case 'choose-double-tribute':
+          this.room.chooseDoubleTribute(attachment.sessionId, message.cardId);
+          break;
+        case 'return-tribute':
+          this.room.returnTribute(attachment.sessionId, message.cardId);
           break;
         case 'quick-message':
           this.ctx.getWebSockets().forEach((connection) => {

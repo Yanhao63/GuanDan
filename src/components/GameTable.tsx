@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react';
 import { sortDemoHand } from '../game/demoCards';
 import { classifyPlay } from '../game/rules/classify';
-import type { RoomPlayerView, RoomView } from '../game/room';
+import type { RoomPlayerView, RoomView, TributeAction } from '../game/room';
 import type { Seat } from '../game/rules/match';
 import type { PlayInterpretation } from '../game/rules/types';
 import { Icon } from '../ui/Icon';
+import { DealResultOverlay } from './DealResultOverlay';
 import { PlayerSeat } from './PlayerSeat';
 import { PokerCard } from './PokerCard';
 import { QuickChatDrawer } from './QuickChatDrawer';
 import { TopHud } from './TopHud';
+import { TributeOverlay } from './TributeOverlay';
 import { WildcardModal } from './WildcardModal';
 
 interface GameTableProps {
@@ -16,6 +18,8 @@ interface GameTableProps {
   onPass: () => void;
   onPlay: (cardIds: string[], description: string) => void;
   onQuickMessage: (message: string) => void;
+  onNextDeal: () => void;
+  onTributeAction: (action: Exclude<TributeAction, 'waiting'>, cardId: string) => void;
   reconnectCode: string;
   view: RoomView;
 }
@@ -32,7 +36,16 @@ function playerAt(view: RoomView, seat: Seat): RoomPlayerView {
   return player;
 }
 
-export function GameTable({ notice = '', onPass, onPlay, onQuickMessage, reconnectCode, view }: GameTableProps) {
+export function GameTable({
+  notice = '',
+  onNextDeal,
+  onPass,
+  onPlay,
+  onQuickMessage,
+  onTributeAction,
+  reconnectCode,
+  view,
+}: GameTableProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showChat, setShowChat] = useState(false);
   const [showWildcard, setShowWildcard] = useState(false);
@@ -98,7 +111,14 @@ export function GameTable({ notice = '', onPass, onPlay, onQuickMessage, reconne
 
   return (
     <main className="game-screen">
-      <TopHud level={view.level} reconnectCode={reconnectCode} roomCode={view.roomCode} timerLabel={view.timer} />
+      <TopHud
+        level={view.level}
+        progress={view.progress}
+        reconnectCode={reconnectCode}
+        roomCode={view.roomCode}
+        selfSeat={view.selfSeat}
+        timerLabel={view.timer}
+      />
 
       <div className="table-canvas">
         <PlayerSeat cardCount={topPlayer.cardCount ?? undefined} isActive={view.pause === null && view.currentSeat === topPlayer.seat} isTeammate name={topPlayer.nickname} position="top" status={topPlayer.controlledByBot ? '机器人接管中' : topPlayer.connected ? '与你同队' : '等待重连'} />
@@ -154,6 +174,25 @@ export function GameTable({ notice = '', onPass, onPlay, onQuickMessage, reconne
               <p>{view.pause.kind === 'host' ? '房主回来后牌局继续，进行中不会转移房主或启用机器人。' : '若 120 秒内仍未回来，将由机器人暂时接管；本人回来后可随时重新接手。'}</p>
             </section>
           </div>
+        ) : null}
+
+        {view.pause === null && view.tribute !== null ? (
+          <TributeOverlay
+            key={view.tribute.action}
+            onAction={onTributeAction}
+            tribute={view.tribute}
+          />
+        ) : null}
+
+        {view.phase === 'complete' && view.settlement !== null ? (
+          <DealResultOverlay
+            finishOrder={view.finishOrder}
+            isHost={selfPlayer.isHost}
+            onNextDeal={onNextDeal}
+            players={view.players}
+            selfSeat={view.selfSeat}
+            settlement={view.settlement}
+          />
         ) : null}
       </div>
 

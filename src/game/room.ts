@@ -1,13 +1,30 @@
 import { createShuffledDeal, type RandomSource } from './deck';
 import { chooseBotAction } from './bot';
 import { classifyPlay } from './rules/classify';
-import { type MatchProgress, type Seat } from './rules/match';
+import {
+  settleDeal,
+  type DealSettlement,
+  type MatchProgress,
+  type Seat,
+} from './rules/match';
+import { getRankStrength } from './rules/ranks';
 import { createTrickState, submitPass, submitPlay, type TrickState } from './rules/trick';
 import { DISCONNECT_GRACE_MS, getPublicCardCount } from './rules/timing';
+import {
+  beginTributeRound,
+  chooseDoubleTribute,
+  getHighestTributeChoices,
+  getReturnCardChoices,
+  submitReturnCard,
+  submitTribute,
+  type HandsBySeat,
+  type TributeRoundState,
+  type TributeTransition,
+} from './rules/tribute';
 import type { PlainRank, PlayInterpretation } from './rules/types';
 import type { CardData, PlayerKind, TimerChoice } from './types';
 
-export type RoomPhase = 'lobby' | 'playing' | 'complete';
+export type RoomPhase = 'lobby' | 'tribute' | 'playing' | 'complete';
 
 export interface RoomMemberState {
   connected: boolean;
@@ -31,6 +48,8 @@ export interface RoomSnapshot {
   roomCode: string;
   timer: TimerChoice;
   trick: TrickState | null;
+  settlement?: DealSettlement | null;
+  tribute?: TributeRoundState | null;
 }
 
 export interface JoinReceipt {
@@ -52,6 +71,7 @@ export interface RoomPlayerView {
 
 export interface RoomView {
   currentSeat: Seat | null;
+  finishOrder: Seat[];
   hand: CardData[];
   lastPlay: null | {
     cards: CardData[];
@@ -65,9 +85,21 @@ export interface RoomView {
     seat: Seat;
   };
   players: RoomPlayerView[];
+  progress: MatchProgress;
   roomCode: string;
   selfSeat: Seat;
+  settlement: DealSettlement | null;
   timer: TimerChoice;
+  tribute: TributeView | null;
+}
+
+export type TributeAction = 'pay-tribute' | 'choose-double-tribute' | 'return-tribute' | 'waiting';
+
+export interface TributeView {
+  action: TributeAction;
+  choices: CardData[];
+  message: string;
+  mode: 'single' | 'double';
 }
 
 export type TokenSource = () => string;
@@ -101,8 +133,10 @@ export class RoomEngine {
   private members: Array<RoomMemberState | null> = [null, null, null, null];
   private phase: RoomPhase = 'lobby';
   private progress: MatchProgress = structuredClone(INITIAL_PROGRESS);
+  private settlement: DealSettlement | null = null;
   private timer: TimerChoice = '不限时';
   private trick: TrickState | null = null;
+  private tribute: TributeRoundState | null = null;
 
   constructor(
     private readonly roomCode: string,
@@ -125,8 +159,10 @@ export class RoomEngine {
     }));
     room.phase = snapshot.phase;
     room.progress = structuredClone(snapshot.progress);
+    room.settlement = structuredClone(snapshot.settlement ?? null);
     room.timer = snapshot.timer;
     room.trick = structuredClone(snapshot.trick);
+    room.tribute = structuredClone(snapshot.tribute ?? null);
     return room;
   }
 
@@ -283,7 +319,67 @@ export class RoomEngine {
     });
     const leader = Math.floor(validateRandomSample(this.random()) * 4) as Seat;
     this.trick = createTrickState(leader);
+    this.settlement = null;
+    this.tribute = null;
     this.phase = 'playing';
+  }
+
+  startNextDeal(hostSessionId: string): void {
+    this.requireHost(hostSessionId);
+    if (this.phase !== 'complete' || this.trick === null || this.settlement === null) {
+      throw new Error('当前还不能开始下一副');
+    }
+    if (this.settlement.matchWinner !== null) {
+      throw new Error('整场比赛已经结束');
+    }
+    if (this.members.some((member) => member?.kind === 'human' && !member.connected)) {
+      throw new Error('有玩家掉线，暂时不能开始下一副');
+    }
+
+    const finishOrder = [...this.trick.finishOrder];
+    const hands = createShuffledDeal(this.random);
+    this.applyHands(hands);
+    this.trick = null;
+    this.settlement = null;
+    this.tribute = beginTributeRound(finishOrder, hands, this.level);
+    this.phase = 'tribute';
+    this.finishTributeIfReady();
+  }
+
+  payTribute(sessionId: string, cardId: string): void {
+    this.requireTributePhase();
+    const member = this.getMember(sessionId);
+    const transition = submitTribute(
+      this.tribute as TributeRoundState,
+      this.getHands(),
+      member.seat,
+      cardId,
+    );
+    this.applyTributeTransition(transition);
+  }
+
+  chooseDoubleTribute(sessionId: string, cardId: string): void {
+    this.requireTributePhase();
+    const member = this.getMember(sessionId);
+    const transition = chooseDoubleTribute(
+      this.tribute as TributeRoundState,
+      this.getHands(),
+      member.seat,
+      cardId,
+    );
+    this.applyTributeTransition(transition);
+  }
+
+  returnTribute(sessionId: string, cardId: string): void {
+    this.requireTributePhase();
+    const member = this.getMember(sessionId);
+    const transition = submitReturnCard(
+      this.tribute as TributeRoundState,
+      this.getHands(),
+      member.seat,
+      cardId,
+    );
+    this.applyTributeTransition(transition);
   }
 
   play(sessionId: string, cardIds: string[], description?: string): void {
@@ -321,6 +417,11 @@ export class RoomEngine {
     member.hand = member.hand.filter((card) => !cardIds.includes(card.id));
     this.trick = transition.state;
     if (transition.event === 'deal-complete') {
+      const settlement = settleDeal(this.progress, transition.state.finishOrder);
+      this.progress = settlement.teams;
+      this.level = settlement.nextLevel;
+      this.settlement = settlement;
+      this.tribute = null;
       this.phase = 'complete';
     }
   }
@@ -337,10 +438,15 @@ export class RoomEngine {
   }
 
   runCurrentBotTurn(): boolean {
-    if (this.phase !== 'playing' || this.trick?.currentSeat === null || this.trick === null) {
+    if (this.getPause() !== null) {
       return false;
     }
-    if (this.getPause() !== null) {
+
+    if (this.phase === 'tribute' && this.tribute !== null) {
+      return this.runBotTributeAction();
+    }
+
+    if (this.phase !== 'playing' || this.trick?.currentSeat === null || this.trick === null) {
       return false;
     }
     const member = this.members[this.trick.currentSeat];
@@ -371,6 +477,7 @@ export class RoomEngine {
     const self = this.getMember(sessionId);
     return {
       currentSeat: this.trick?.currentSeat ?? null,
+      finishOrder: [...(this.trick?.finishOrder ?? [])],
       hand: [...self.hand],
       lastPlay: this.trick?.lastPlay === null || this.trick?.lastPlayer === null || this.trick === null
         ? null
@@ -391,9 +498,12 @@ export class RoomEngine {
         nickname: member.nickname,
         seat: member.seat,
       }]),
+      progress: structuredClone(this.progress),
       roomCode: this.roomCode,
       selfSeat: self.seat,
+      settlement: structuredClone(this.settlement),
       timer: this.timer,
+      tribute: this.getTributeView(self),
     };
   }
 
@@ -408,8 +518,10 @@ export class RoomEngine {
       phase: this.phase,
       progress: structuredClone(this.progress),
       roomCode: this.roomCode,
+      settlement: structuredClone(this.settlement),
       timer: this.timer,
       trick: structuredClone(this.trick),
+      tribute: structuredClone(this.tribute),
     };
   }
 
@@ -446,7 +558,11 @@ export class RoomEngine {
         continue;
       }
 
-      if (!member.isHost && this.phase === 'playing' && !member.controlledByBot) {
+      if (
+        !member.isHost
+        && (this.phase === 'playing' || this.phase === 'tribute')
+        && !member.controlledByBot
+      ) {
         member.controlledByBot = true;
         events.push({ seat: member.seat, type: 'bot-takeover' });
       }
@@ -472,7 +588,7 @@ export class RoomEngine {
           ? [member.disconnectedAt + DISCONNECT_GRACE_MS]
           : [];
       }
-      return this.phase === 'playing'
+      return this.phase === 'playing' || this.phase === 'tribute'
         ? [member.disconnectedAt + DISCONNECT_GRACE_MS]
         : [];
     });
@@ -480,26 +596,212 @@ export class RoomEngine {
   }
 
   private getPause(): RoomView['pause'] {
-    if (this.phase !== 'playing') {
+    if (this.phase !== 'playing' && this.phase !== 'tribute') {
       return null;
     }
     const host = this.members.find((member) => member?.isHost);
     if (host !== null && host !== undefined && !host.connected) {
       return { kind: 'host', seat: host.seat };
     }
-    if (this.trick?.currentSeat === null || this.trick === null) {
+
+    if (this.phase === 'playing') {
+      if (this.trick?.currentSeat === null || this.trick === null) {
+        return null;
+      }
+      const current = this.members[this.trick.currentSeat];
+      if (
+        current !== null
+        && current.kind === 'human'
+        && !current.connected
+        && !current.controlledByBot
+      ) {
+        return { kind: 'player', seat: current.seat };
+      }
       return null;
     }
-    const current = this.members[this.trick.currentSeat];
-    if (
-      current !== null
-      && current.kind === 'human'
-      && !current.connected
-      && !current.controlledByBot
-    ) {
-      return { kind: 'player', seat: current.seat };
+
+    const pendingSeats = this.getPendingTributeSeats();
+    const hasAvailableAction = pendingSeats.some((seat) => {
+      const member = this.members[seat];
+      return member !== null
+        && (member.kind === 'bot' || member.controlledByBot || member.connected);
+    });
+    if (hasAvailableAction) {
+      return null;
+    }
+    const disconnected = pendingSeats
+      .map((seat) => this.members[seat])
+      .find((member) => member?.kind === 'human' && !member.connected && !member.controlledByBot);
+    if (disconnected !== null && disconnected !== undefined) {
+      return { kind: 'player', seat: disconnected.seat };
     }
     return null;
+  }
+
+  private requireTributePhase(): void {
+    if (this.phase !== 'tribute' || this.tribute === null) {
+      throw new Error('当前不在贡还牌流程');
+    }
+    if (this.getPause() !== null) {
+      throw new Error('牌局正在等待掉线玩家重连');
+    }
+  }
+
+  private getHands(): HandsBySeat {
+    const hands = {} as HandsBySeat;
+    for (const seat of [0, 1, 2, 3] as Seat[]) {
+      const member = this.members[seat];
+      if (member === null) {
+        throw new Error('牌局座位数据不完整');
+      }
+      hands[seat] = member.hand;
+    }
+    return hands;
+  }
+
+  private applyHands(hands: HandsBySeat): void {
+    for (const seat of [0, 1, 2, 3] as Seat[]) {
+      const member = this.members[seat];
+      if (member === null) {
+        throw new Error('牌局座位数据不完整');
+      }
+      member.hand = hands[seat];
+    }
+  }
+
+  private applyTributeTransition(transition: TributeTransition): void {
+    this.applyHands(transition.hands);
+    this.tribute = transition.state;
+    this.finishTributeIfReady();
+  }
+
+  private finishTributeIfReady(): void {
+    if (this.tribute?.phase !== 'complete') {
+      return;
+    }
+    if (this.tribute.leader === null) {
+      throw new Error('贡还牌结束后无法确定首出玩家');
+    }
+    this.trick = createTrickState(this.tribute.leader);
+    this.phase = 'playing';
+  }
+
+  private getPendingTributeSeats(): Seat[] {
+    if (this.tribute === null || this.tribute.phase === 'complete') {
+      return [];
+    }
+    if (this.tribute.phase === 'collecting-tributes') {
+      return this.tribute.contributorSeats.filter(
+        (seat) => !this.tribute?.offers.some((offer) => offer.source === seat),
+      );
+    }
+    if (this.tribute.phase === 'choosing-double-tribute') {
+      return [this.tribute.headSeat];
+    }
+    return this.tribute.assignments
+      .filter((assignment) => !this.tribute?.returns.some(
+        (record) => record.recipient === assignment.recipient,
+      ))
+      .map((assignment) => assignment.recipient);
+  }
+
+  private getTributeView(self: RoomMemberState): TributeView | null {
+    if (this.phase !== 'tribute' || this.tribute === null) {
+      return null;
+    }
+
+    if (
+      this.tribute.phase === 'collecting-tributes'
+      && this.tribute.contributorSeats.includes(self.seat)
+      && !this.tribute.offers.some((offer) => offer.source === self.seat)
+    ) {
+      return {
+        action: 'pay-tribute',
+        choices: getHighestTributeChoices(self.hand, this.level),
+        message: '请选择手中点数最高且可进贡的牌',
+        mode: this.tribute.mode,
+      };
+    }
+
+    if (
+      this.tribute.phase === 'choosing-double-tribute'
+      && this.tribute.headSeat === self.seat
+    ) {
+      return {
+        action: 'choose-double-tribute',
+        choices: this.tribute.offers.map((offer) => offer.card),
+        message: '请选择自己要接收的贡牌，另一张自动交给队友',
+        mode: this.tribute.mode,
+      };
+    }
+
+    if (
+      this.tribute.phase === 'collecting-returns'
+      && this.tribute.assignments.some((assignment) => assignment.recipient === self.seat)
+      && !this.tribute.returns.some((record) => record.recipient === self.seat)
+    ) {
+      return {
+        action: 'return-tribute',
+        choices: getReturnCardChoices(self.hand),
+        message: '请选择一张自然点数 2 至 10 的牌还贡',
+        mode: this.tribute.mode,
+      };
+    }
+
+    return {
+      action: 'waiting',
+      choices: [],
+      message: this.tribute.phase === 'collecting-tributes'
+        ? '等待进贡方选牌'
+        : this.tribute.phase === 'choosing-double-tribute'
+          ? '等待头游分配两张贡牌'
+          : '等待接贡方完成还贡',
+      mode: this.tribute.mode,
+    };
+  }
+
+  private runBotTributeAction(): boolean {
+    if (this.tribute === null || this.phase !== 'tribute') {
+      return false;
+    }
+
+    const botSeat = this.getPendingTributeSeats().find((seat) => {
+      const member = this.members[seat];
+      return member !== null && (member.kind === 'bot' || member.controlledByBot);
+    });
+    if (botSeat === undefined) {
+      return false;
+    }
+    const bot = this.members[botSeat];
+    if (bot === null) {
+      return false;
+    }
+
+    if (this.tribute.phase === 'collecting-tributes') {
+      const choice = getHighestTributeChoices(bot.hand, this.level)[0];
+      if (choice === undefined) {
+        throw new Error('机器人没有可进贡的牌');
+      }
+      this.payTribute(bot.id, choice.id);
+      return true;
+    }
+
+    if (this.tribute.phase === 'choosing-double-tribute') {
+      const choice = this.tribute.offers.reduce((best, offer) => (
+        getRankStrength(offer.card.rank, this.level) > getRankStrength(best.card.rank, this.level)
+          ? offer
+          : best
+      ));
+      this.chooseDoubleTribute(bot.id, choice.card.id);
+      return true;
+    }
+
+    const choice = getReturnCardChoices(bot.hand)[0];
+    if (choice === undefined) {
+      throw new Error('机器人没有符合规则的还贡牌');
+    }
+    this.returnTribute(bot.id, choice.id);
+    return true;
   }
 
   private findNextConnectedHuman(after: Seat): RoomMemberState | null {

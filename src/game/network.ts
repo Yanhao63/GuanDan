@@ -7,8 +7,12 @@ export type OutgoingMessage =
   | { seat: Seat; type: 'remove-bot' }
   | { timer: TimerChoice; type: 'set-timer' }
   | { type: 'start' }
+  | { type: 'start-next-deal' }
   | { cardIds: string[]; description?: string; type: 'play' }
   | { type: 'pass' }
+  | { cardId: string; type: 'pay-tribute' }
+  | { cardId: string; type: 'choose-double-tribute' }
+  | { cardId: string; type: 'return-tribute' }
   | { message: string; type: 'quick-message' };
 
 interface ConnectionHandlers {

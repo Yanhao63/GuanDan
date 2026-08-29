@@ -193,4 +193,86 @@ describe('authoritative room engine', () => {
       [room.getView(receipts[1].sessionId).hand[0].id],
     )).toThrow(/等待掉线玩家/);
   });
+
+  it('settles a deal, lets only the host start the next deal, and completes double tribute', () => {
+    const { receipts, room } = fullHumanRoom();
+    room.start(receipts[0].sessionId);
+    const nearComplete = room.toSnapshot();
+    const finishingCard = nearComplete.members[0]?.hand[0];
+    if (finishingCard === undefined || nearComplete.members[0] === null || nearComplete.members[2] === null) {
+      throw new Error('测试手牌数据缺失');
+    }
+    nearComplete.members[0].hand = [finishingCard];
+    nearComplete.members[2].hand = [];
+    nearComplete.phase = 'playing';
+    nearComplete.trick = {
+      currentSeat: 0,
+      finishOrder: [2],
+      lastPlay: null,
+      lastPlayer: null,
+      passedSinceLastPlay: [],
+      status: 'playing',
+    };
+
+    const completedRoom = RoomEngine.restore(nearComplete, seededRandom(90), tokenSource());
+    completedRoom.play(receipts[0].sessionId, [finishingCard.id]);
+    const completedView = completedRoom.getView(receipts[0].sessionId);
+
+    expect(completedView.phase).toBe('complete');
+    expect(completedView.settlement).toMatchObject({
+      headTeam: 'team-a',
+      matchWinner: null,
+      nextLevel: '5',
+      upgradedBy: 3,
+    });
+    expect(completedView.progress['team-a']).toEqual({ level: '5', aFailures: 0 });
+    expect(() => completedRoom.startNextDeal(receipts[1].sessionId)).toThrow(/房主/);
+
+    const completedSnapshot = completedRoom.toSnapshot();
+    let tributeRoom: RoomEngine | null = null;
+    for (let seed = 1; seed <= 50; seed += 1) {
+      const candidate = RoomEngine.restore(completedSnapshot, seededRandom(seed), tokenSource());
+      candidate.startNextDeal(receipts[0].sessionId);
+      if (candidate.getView(receipts[0].sessionId).phase === 'tribute') {
+        tributeRoom = candidate;
+        break;
+      }
+    }
+    if (tributeRoom === null) {
+      throw new Error('未找到非抗贡的确定性测试牌局');
+    }
+
+    for (const contributorSeat of [1, 3] as const) {
+      const contributor = receipts[contributorSeat];
+      const tributeView = tributeRoom.getView(contributor.sessionId).tribute;
+      expect(tributeView?.action).toBe('pay-tribute');
+      const choice = tributeView?.choices[0];
+      if (choice === undefined) {
+        throw new Error('进贡选择缺失');
+      }
+      tributeRoom.payTribute(contributor.sessionId, choice.id);
+    }
+
+    const headView = tributeRoom.getView(receipts[2].sessionId).tribute;
+    expect(headView).toMatchObject({ action: 'choose-double-tribute', mode: 'double' });
+    expect(headView?.choices).toHaveLength(2);
+    tributeRoom.chooseDoubleTribute(receipts[2].sessionId, headView?.choices[0].id ?? '');
+
+    for (const recipientSeat of [2, 0] as const) {
+      const recipient = receipts[recipientSeat];
+      const returnView = tributeRoom.getView(recipient.sessionId).tribute;
+      expect(returnView?.action).toBe('return-tribute');
+      const choice = returnView?.choices[0];
+      if (choice === undefined) {
+        throw new Error('还贡选择缺失');
+      }
+      tributeRoom.returnTribute(recipient.sessionId, choice.id);
+    }
+
+    const playingView = tributeRoom.getView(receipts[0].sessionId);
+    expect(playingView.phase).toBe('playing');
+    expect(playingView.currentSeat).not.toBeNull();
+    expect(receipts.map((receipt) => tributeRoom?.getView(receipt.sessionId).hand.length))
+      .toEqual([27, 27, 27, 27]);
+  });
 });

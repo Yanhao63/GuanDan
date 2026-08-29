@@ -1,5 +1,5 @@
 import type { CardData, Rank } from '../types';
-import { getRankStrength, isPlainRank } from './ranks';
+import { getRankStrength, isPlainRank, PLAIN_RANKS_ASCENDING } from './ranks';
 import { getTeamForSeat, type Seat } from './match';
 import type { PlainRank } from './types';
 
@@ -23,6 +23,18 @@ export function getHighestTributeChoices(hand: CardData[], level: PlainRank): Ca
 
 export function isValidReturnCard(card: CardData): boolean {
   return isPlainRank(card.rank) && RETURNABLE_RANKS.has(card.rank);
+}
+
+export function getReturnCardChoices(hand: CardData[]): CardData[] {
+  return hand
+    .filter(isValidReturnCard)
+    .sort((first, second) => {
+      if (!isPlainRank(first.rank) || !isPlainRank(second.rank)) {
+        return 0;
+      }
+      return PLAIN_RANKS_ASCENDING.indexOf(first.rank)
+        - PLAIN_RANKS_ASCENDING.indexOf(second.rank);
+    });
 }
 
 export function isSingleTributeResisted(lastPlaceHand: CardData[]): boolean {

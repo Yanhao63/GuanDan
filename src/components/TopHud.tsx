@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { getTeamForSeat, type MatchProgress, type Seat } from '../game/rules/match';
 import { Icon } from '../ui/Icon';
 
 interface TopHudProps {
   level: string;
+  progress: MatchProgress;
   reconnectCode: string;
   roomCode: string;
+  selfSeat: Seat;
   timerLabel: string;
 }
 
@@ -14,10 +17,14 @@ interface AudioState {
   voice: number;
 }
 
-export function TopHud({ level, reconnectCode, roomCode, timerLabel }: TopHudProps) {
+export function TopHud({ level, progress, reconnectCode, roomCode, selfSeat, timerLabel }: TopHudProps) {
   const [showAudio, setShowAudio] = useState(false);
   const [showRoomSettings, setShowRoomSettings] = useState(false);
   const [audio, setAudio] = useState<AudioState>({ bgm: 35, effects: 70, voice: 65 });
+  const selfTeam = getTeamForSeat(selfSeat);
+  const opponentTeam = selfTeam === 'team-a' ? 'team-b' : 'team-a';
+  const selfProgress = progress[selfTeam];
+  const opponentProgress = progress[opponentTeam];
 
   const setVolume = (key: keyof AudioState, value: number) => {
     setAudio((current) => ({ ...current, [key]: value }));
@@ -34,9 +41,9 @@ export function TopHud({ level, reconnectCode, roomCode, timerLabel }: TopHudPro
       <div className="hud-stat"><span>房间</span><strong>{roomCode}</strong></div>
       <div className="hud-stat hud-level"><span>当前级牌</span><strong>{level}</strong></div>
       <div className="hud-team-score">
-        <div><span>我方</span><strong>2</strong><small>打 A 失败 0/3</small></div>
+        <div><span>我方</span><strong>{selfProgress.level}</strong><small>打 A 失败 {selfProgress.aFailures}/3</small></div>
         <i />
-        <div><span>对方</span><strong>2</strong><small>本副等待首出</small></div>
+        <div><span>对方</span><strong>{opponentProgress.level}</strong><small>打 A 失败 {opponentProgress.aFailures}/3</small></div>
       </div>
       <div className="hud-spacer" />
       <div className="direction-chip"><Icon name="rotate" size={18} /> 逆时针</div>

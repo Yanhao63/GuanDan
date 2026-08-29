@@ -153,9 +153,11 @@ export function App() {
   return (
     <GameTable
       notice={message}
+      onNextDeal={() => send({ type: 'start-next-deal' })}
       onPass={() => send({ type: 'pass' })}
       onPlay={(cardIds, description) => send({ cardIds, description, type: 'play' })}
       onQuickMessage={(quickMessage) => send({ message: quickMessage, type: 'quick-message' })}
+      onTributeAction={(action, cardId) => send({ cardId, type: action })}
       reconnectCode={reconnectCode}
       view={view}
     />

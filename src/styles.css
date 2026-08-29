@@ -284,6 +284,23 @@ button:focus-visible, input:focus-visible {
 .wildcard-options button > span:last-child { display: flex; flex-direction: column; gap: 4px; }
 .wildcard-options small { color: var(--muted); }
 .modal-cancel { margin-top: 18px; min-height: 38px; }
+.tribute-backdrop, .result-backdrop { background: #010806b8; }
+.tribute-modal { width: min(620px, 46vw); }
+.tribute-cards { display: flex; align-items: flex-end; justify-content: center; min-height: 150px; margin: 8px 0 22px; }
+.tribute-cards .poker-card { flex-basis: 86px; width: 86px; height: 124px; margin-left: 12px; }
+.tribute-cards .poker-card:first-child { margin-left: 0; }
+.tribute-confirm { min-width: 180px; }
+.tribute-waiting { margin: 24px 0 8px; border: 1px solid #c3a15b55; border-radius: 10px; padding: 16px; color: var(--muted); background: #05271f; }
+.tribute-waiting span { color: var(--brass-bright); }
+.tribute-warning { color: #f0c075; line-height: 1.7; }
+.result-modal { width: min(580px, 44vw); }
+.finish-order { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 22px 0; text-align: left; }
+.finish-order > div { display: flex; align-items: center; justify-content: space-between; border: 1px solid #c3a15b55; border-radius: 9px; padding: 11px 14px; background: #05271f; }
+.finish-order span { color: var(--brass); font-size: 12px; }
+.finish-order strong { font-size: 15px; }
+.result-summary { margin: 0 0 20px; color: var(--muted); line-height: 1.7; }
+.result-next { min-width: 210px; }
+.result-waiting { margin: 0; color: var(--brass-bright); }
 
 @keyframes drawer-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes fade-in { from { opacity: 0; } }
