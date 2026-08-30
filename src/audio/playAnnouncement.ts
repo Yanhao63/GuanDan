@@ -8,8 +8,19 @@ const suitNames: Partial<Record<Suit, string>> = {
   spades: '黑桃',
 };
 
-function compactRanks(label: string): string {
-  return label.replaceAll('-', '').replaceAll(' ', '');
+const spokenRanks: Record<string, string> = {
+  A: '尖',
+  J: '勾',
+  Q: '圈',
+};
+
+function speakRank(rank: string): string {
+  const trimmed = rank.trim();
+  return spokenRanks[trimmed] ?? trimmed;
+}
+
+function speakSequence(label: string): string {
+  return label.split('-').map(speakRank).join('、');
 }
 
 function getStraightFlushSuit(event: RoomPlayEvent): string {
@@ -31,48 +42,48 @@ export function describePlayForSpeech(event: RoomPlayEvent): string {
 
   const fullHouse = /^三张\s+(.+?)\s+带\s+(.+?)\s+对$/.exec(description);
   if (fullHouse !== null) {
-    return `三张${fullHouse[1]}带对${fullHouse[2]}`;
+    return `三张${speakRank(fullHouse[1])}带对${speakRank(fullHouse[2])}`;
   }
 
   const consecutivePairs = /^三连对\s+(.+)$/.exec(description);
   if (consecutivePairs !== null) {
-    return `木板${compactRanks(consecutivePairs[1])}`;
+    return `木板${speakSequence(consecutivePairs[1])}`;
   }
 
   const steelPlate = /^钢板\s+(.+?)-(.+)$/.exec(description);
   if (steelPlate !== null) {
-    return `三个${steelPlate[1]}三个${steelPlate[2]}`;
+    return `三个${speakRank(steelPlate[1])}三个${speakRank(steelPlate[2])}`;
   }
 
   const straightFlush = /^同花顺\s+(.+)$/.exec(description);
   if (straightFlush !== null) {
-    return `${getStraightFlushSuit(event)}${compactRanks(straightFlush[1])}`;
+    return `${getStraightFlushSuit(event)}${speakSequence(straightFlush[1])}同花顺`;
   }
 
   const straight = /^顺子\s+(.+)$/.exec(description);
   if (straight !== null) {
-    return `顺子${compactRanks(straight[1])}`;
+    return `顺子${speakSequence(straight[1])}`;
   }
 
   const bomb = /^(\d+)\s*张(.+?)炸弹$/.exec(description);
   if (bomb !== null) {
-    return `${bomb[1]}张${bomb[2]}炸炸炸`;
+    return `${bomb[1]}张${speakRank(bomb[2])}炸炸炸`;
   }
 
   const single = /^单张\s+(.+)$/.exec(description);
   if (single !== null) {
-    return `一张${single[1]}`;
+    return `一张${speakRank(single[1])}`;
   }
 
   const pair = /^(.+?)对子$/.exec(description);
   if (pair !== null) {
-    return `一对${pair[1]}`;
+    return `一对${speakRank(pair[1])}`;
   }
 
   const triple = /^(.+?)三张$/.exec(description);
   if (triple !== null) {
-    return `三张${triple[1]}`;
+    return `三张${speakRank(triple[1])}`;
   }
 
-  return description;
+  return description.replaceAll('J', '勾').replaceAll('Q', '圈').replaceAll('A', '尖');
 }
