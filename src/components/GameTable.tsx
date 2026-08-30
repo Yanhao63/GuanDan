@@ -3,6 +3,11 @@ import { gameAudio, loadAudioSettings, type AudioSettings } from '../audio/gameA
 import { sortDemoHand } from '../game/demoCards';
 import { classifyPlay } from '../game/rules/classify';
 import { applyHandOrder, moveCardBefore } from '../game/handOrder';
+import {
+  createPointerDrag,
+  updatePointerDrag,
+  type PointerDragState,
+} from '../game/pointerGesture';
 import type { NetworkPlayEvent, NetworkQuickMessage } from '../game/network';
 import type { RoomPlayerView, RoomView, TributeAction } from '../game/room';
 import type { Seat } from '../game/rules/match';
@@ -37,14 +42,6 @@ interface QuickMessageBubbleProps {
   nickname: string;
   onComplete: () => void;
   selfSeat: Seat;
-}
-
-interface PointerDragState {
-  active: boolean;
-  cardId: string;
-  startX: number;
-  startY: number;
-  targetId: string;
 }
 
 function QuickMessageBubble({ event, nickname, onComplete, selfSeat }: QuickMessageBubbleProps) {
@@ -160,14 +157,7 @@ export function GameTable({
     if (cardId === undefined) {
       return;
     }
-    pointerDragRef.current = {
-      active: false,
-      cardId,
-      startX: event.clientX,
-      startY: event.clientY,
-      targetId: cardId,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    pointerDragRef.current = createPointerDrag(cardId, event.clientX, event.clientY);
   };
 
   const movePointerDrag = (event: PointerEvent<HTMLDivElement>) => {
@@ -175,21 +165,26 @@ export function GameTable({
     if (drag === null) {
       return;
     }
-    if (!drag.active && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 6) {
-      drag.active = true;
-      setHandOrder(hand.map((card) => card.id));
-      setDraggingId(drag.cardId);
-      setDragTargetId(drag.cardId);
-    }
-    if (!drag.active) {
-      return;
-    }
     const target = document.elementFromPoint(event.clientX, event.clientY)
       ?.closest<HTMLElement>('[data-card-id]');
-    const targetId = target?.dataset.cardId;
-    if (targetId !== undefined && targetId !== drag.targetId) {
-      drag.targetId = targetId;
-      setDragTargetId(targetId);
+    const update = updatePointerDrag(
+      drag,
+      event.clientX,
+      event.clientY,
+      target?.dataset.cardId,
+    );
+    pointerDragRef.current = update.state;
+    if (update.started) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setHandOrder(hand.map((card) => card.id));
+      setDraggingId(update.state.cardId);
+      setDragTargetId(update.state.cardId);
+    }
+    if (!update.state.active) {
+      return;
+    }
+    if (update.state.targetId !== drag.targetId) {
+      setDragTargetId(update.state.targetId);
     }
   };
 
