@@ -136,7 +136,7 @@ export type DisconnectEvent =
   | { seat: Seat; type: 'bot-takeover' }
   | { from: Seat; to: Seat; type: 'host-transfer' };
 
-export const BOT_ACTION_DELAY_MS = 1_500;
+export const BOT_ACTION_DELAY_MS = 2_500;
 
 const INITIAL_PROGRESS: MatchProgress = {
   'team-a': { level: '2', aFailures: 0 },

@@ -194,7 +194,7 @@ describe('authoritative room engine', () => {
     expect(after).toEqual(before);
   });
 
-  it('paces consecutive bot turns 1.5 seconds apart until a human must act', () => {
+  it('paces consecutive bot turns 2.5 seconds apart until a human must act', () => {
     const room = new RoomEngine('123456', seededRandom(12), tokenSource());
     const host = room.joinHuman('房主');
     room.addBot(host.sessionId, 1);
