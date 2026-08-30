@@ -260,6 +260,8 @@ button:focus-visible, input:focus-visible {
 .self-status .self-turn-tag { border: 2px solid #f0d98b; border-radius: 999px; padding: 5px 11px; color: var(--walnut-deep); background: linear-gradient(180deg, #f1d993, var(--jade)); box-shadow: 0 5px 16px #0007, 0 0 18px #d7e5cf77; font-weight: 800; white-space: nowrap; }
 .self-area-active .self-avatar { box-shadow: 0 0 0 5px #24170f, 0 0 0 9px var(--brass-bright), 0 0 38px #f0d98bcc; }
 .self-area-active .self-status strong { color: var(--brass-bright); text-shadow: 0 0 12px #e1c77888; }
+.turn-progress { position: absolute; z-index: 10; bottom: calc(46% + clamp(54px, 3.8vw, 74px)); left: 50%; width: clamp(250px, 21vw, 400px); height: clamp(8px, .65vw, 12px); overflow: hidden; border: 1px solid #e1c778aa; border-radius: 999px; background: #031b16dd; box-shadow: 0 5px 16px #0009, inset 0 0 0 2px #24170f; transform: translateX(-50%); }
+.turn-progress > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #d15a47 0%, #e4c978 48%, #b9d6b5 100%); box-shadow: 0 0 12px #e1c77899; transition: width 100ms linear; }
 .action-bar { position: absolute; z-index: 10; bottom: 46%; left: 50%; display: flex; align-items: center; gap: clamp(7px, .6vw, 12px); transform: translateX(-50%); }
 .action-small { min-width: clamp(72px, 5.4vw, 104px); min-height: clamp(34px, 2.5vw, 48px); padding: 0 15px; }
 .play-button { min-width: clamp(126px, 9vw, 172px); min-height: clamp(42px, 3vw, 58px); font-size: clamp(15px, 1.05vw, 21px); }

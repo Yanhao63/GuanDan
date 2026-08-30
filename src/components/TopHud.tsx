@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { AudioSettings } from '../audio/gameAudio';
 import { getTeamForSeat, type MatchProgress, type Seat } from '../game/rules/match';
 import { Icon } from '../ui/Icon';
@@ -32,23 +32,10 @@ export function TopHud({
 }: TopHudProps) {
   const [showAudio, setShowAudio] = useState(false);
   const [showRoomSettings, setShowRoomSettings] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
   const selfTeam = getTeamForSeat(selfSeat);
   const opponentTeam = selfTeam === 'team-a' ? 'team-b' : 'team-a';
   const selfProgress = progress[selfTeam];
   const opponentProgress = progress[opponentTeam];
-  const remainingSeconds = turnDeadline === null
-    ? null
-    : Math.max(0, Math.ceil((turnDeadline - now) / 1_000));
-
-  useEffect(() => {
-    if (turnDeadline === null) {
-      return undefined;
-    }
-    const interval = window.setInterval(() => setNow(Date.now()), 250);
-    return () => window.clearInterval(interval);
-  }, [turnDeadline]);
-
   const copyReconnectCode = async () => {
     await navigator.clipboard?.writeText(reconnectCode);
   };
@@ -67,7 +54,7 @@ export function TopHud({
       <div className="hud-spacer" />
       <div className="direction-chip"><Icon name="rotate" size={18} /> 逆时针</div>
       <div aria-live="polite" className="timer-chip">
-        {remainingSeconds === null ? timerLabel : `剩余 ${remainingSeconds} 秒`}
+        {turnDeadline === null ? timerLabel : '限时出牌'}
       </div>
       <button aria-expanded={historyOpen} aria-label="查看出牌历史" className="hud-icon-button" onClick={onHistoryToggle} type="button">
         <Icon name="history" />

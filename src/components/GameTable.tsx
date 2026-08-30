@@ -22,6 +22,7 @@ import { QuickChatDrawer } from './QuickChatDrawer';
 import { DirectionalPlay, getTableDirection, TurnIndicator } from './TableActivity';
 import { TopHud } from './TopHud';
 import { TributeOverlay } from './TributeOverlay';
+import { TurnProgressBar } from './TurnProgressBar';
 import { WildcardModal } from './WildcardModal';
 
 interface GameTableProps {
@@ -310,6 +311,7 @@ export function GameTable({
             {isSelfTurn ? <span className="self-turn-tag">当前出牌</span> : null}
           </div>
 
+          <TurnProgressBar timer={view.timer} turnDeadline={view.turnDeadline} />
           <div className="action-bar">
             <button className="button button-secondary action-small" disabled={!isSelfTurn || view.lastPlay === null} onClick={() => { setSelectedIds([]); onPass(); }} type="button">不要</button>
             <button className="button button-primary play-button" disabled={!isSelfTurn || selectedIds.length === 0} onClick={handlePlay} type="button">
