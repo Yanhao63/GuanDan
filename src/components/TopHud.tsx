@@ -56,7 +56,7 @@ export function TopHud({
       <div aria-live="polite" className="timer-chip">
         {turnDeadline === null ? timerLabel : '限时出牌'}
       </div>
-      <button aria-expanded={historyOpen} aria-label="查看出牌历史" className="hud-icon-button" onClick={onHistoryToggle} type="button">
+      <button aria-expanded={historyOpen} aria-label="查看牌局历史" className="hud-icon-button" onClick={onHistoryToggle} type="button">
         <Icon name="history" />
       </button>
       <button aria-expanded={showAudio} aria-label="声音设置" className="hud-icon-button" onClick={() => setShowAudio((open) => !open)} type="button">

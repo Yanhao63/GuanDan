@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { BOT_ACTION_DELAY_MS, RoomEngine } from './room';
+import {
+  BOT_ACTION_DELAY_MS,
+  DOUBLE_TRIBUTE_REVEAL_MS,
+  RoomEngine,
+  SINGLE_TRIBUTE_REVEAL_MS,
+  getTributeRevealDurationMs,
+} from './room';
 import { getRankStrength } from './rules/ranks';
 import { DISCONNECT_GRACE_MS } from './rules/timing';
 
@@ -26,6 +32,13 @@ function fullHumanRoom(): {
 }
 
 describe('authoritative room engine', () => {
+  it('reveals both single and double tributes for six seconds', () => {
+    expect(SINGLE_TRIBUTE_REVEAL_MS).toBe(6_000);
+    expect(DOUBLE_TRIBUTE_REVEAL_MS).toBe(6_000);
+    expect(getTributeRevealDurationMs('single')).toBe(6_000);
+    expect(getTributeRevealDurationMs('double')).toBe(6_000);
+  });
+
   it('forbids duplicate nicknames and a fifth player', () => {
     const room = new RoomEngine('123456', seededRandom(1), tokenSource());
     room.joinHuman('甲');
@@ -355,7 +368,7 @@ describe('authoritative room engine', () => {
     let tributeRoom: RoomEngine | null = null;
     for (let seed = 1; seed <= 50; seed += 1) {
       const candidate = RoomEngine.restore(completedSnapshot, seededRandom(seed), tokenSource());
-      candidate.startNextDeal(receipts[0].sessionId);
+      candidate.startNextDeal(receipts[0].sessionId, 10_000);
       if (candidate.getView(receipts[0].sessionId).phase === 'tribute') {
         tributeRoom = candidate;
         break;
@@ -365,7 +378,7 @@ describe('authoritative room engine', () => {
       throw new Error('未找到非抗贡的确定性测试牌局');
     }
 
-    for (const contributorSeat of [1, 3] as const) {
+    for (const [index, contributorSeat] of ([1, 3] as const).entries()) {
       const contributor = receipts[contributorSeat];
       const tributeView = tributeRoom.getView(contributor.sessionId).tribute;
       expect(tributeView?.action).toBe('pay-tribute');
@@ -373,8 +386,23 @@ describe('authoritative room engine', () => {
       if (choice === undefined) {
         throw new Error('进贡选择缺失');
       }
-      tributeRoom.payTribute(contributor.sessionId, choice.id);
+      tributeRoom.payTribute(contributor.sessionId, choice.id, 11_000 + index * 1_000);
     }
+
+    const revealViews = receipts.map((receipt) => tributeRoom?.getView(receipt.sessionId).tribute);
+    expect(revealViews.every((view) => view?.action === 'reveal')).toBe(true);
+    expect(revealViews.every((view) => view?.revealedCards.length === 2)).toBe(true);
+    expect(revealViews[0]).toMatchObject({
+      revealDeadline: 12_000 + DOUBLE_TRIBUTE_REVEAL_MS,
+      revealDurationMs: DOUBLE_TRIBUTE_REVEAL_MS,
+    });
+    expect(tributeRoom.getView(receipts[0].sessionId).history.at(-1)?.entries)
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: 'tribute', player: 1 }),
+        expect.objectContaining({ kind: 'tribute', player: 3 }),
+      ]));
+    expect(tributeRoom.applyTributeRevealTimeout(12_000 + DOUBLE_TRIBUTE_REVEAL_MS - 1)).toBe(false);
+    expect(tributeRoom.applyTributeRevealTimeout(12_000 + DOUBLE_TRIBUTE_REVEAL_MS)).toBe(true);
 
     const headView = tributeRoom.getView(receipts[2].sessionId).tribute;
     expect(headView).toMatchObject({ action: 'choose-double-tribute', mode: 'double' });
@@ -397,5 +425,7 @@ describe('authoritative room engine', () => {
     expect(playingView.currentSeat).not.toBeNull();
     expect(receipts.map((receipt) => tributeRoom?.getView(receipt.sessionId).hand.length))
       .toEqual([27, 27, 27, 27]);
+    expect(playingView.history.at(-1)?.entries.filter((entry) => entry.kind === 'return-tribute'))
+      .toHaveLength(2);
   });
 });

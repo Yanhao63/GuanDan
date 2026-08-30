@@ -35,7 +35,7 @@ interface GameTableProps {
   onQuickMessage: (message: string) => void;
   onQuickMessageComplete: () => void;
   onNextDeal: () => void;
-  onTributeAction: (action: Exclude<TributeAction, 'waiting'>, cardId: string) => void;
+  onTributeAction: (action: Exclude<TributeAction, 'reveal' | 'waiting'>, cardId: string) => void;
   reconnectCode: string;
   view: RoomView;
 }
@@ -144,6 +144,12 @@ export function GameTable({
       gameAudio.playEffect('turn');
     }
   }, [isSelfTurn]);
+
+  useEffect(() => {
+    if (view.tribute?.action === 'reveal') {
+      gameAudio.playEffect('tribute');
+    }
+  }, [view.tribute?.action]);
 
   const changeAudio = (key: keyof AudioSettings, value: number) => {
     setAudio((current) => ({ ...current, [key]: value }));
@@ -365,6 +371,7 @@ export function GameTable({
             key={view.tribute.action}
             level={view.level}
             onAction={onTributeAction}
+            players={view.players}
             tribute={view.tribute}
           />
         ) : null}

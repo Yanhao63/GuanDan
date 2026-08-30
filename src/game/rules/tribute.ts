@@ -53,6 +53,7 @@ interface TributeSource {
 export type TributeMode = 'single' | 'double';
 export type TributePhase =
   | 'collecting-tributes'
+  | 'revealing-tributes'
   | 'choosing-double-tribute'
   | 'collecting-returns'
   | 'complete';
@@ -216,7 +217,7 @@ export function submitTribute(
         ...state,
         assignments: [assignment],
         offers,
-        phase: 'collecting-returns',
+        phase: 'revealing-tributes',
       },
     };
   }
@@ -227,9 +228,19 @@ export function submitTribute(
       ...state,
       offers,
       phase: offers.length === state.contributorSeats.length
-        ? 'choosing-double-tribute'
+        ? 'revealing-tributes'
         : 'collecting-tributes',
     },
+  };
+}
+
+export function finishTributeReveal(state: TributeRoundState): TributeRoundState {
+  if (state.phase !== 'revealing-tributes') {
+    throw new Error('当前不在贡牌公开阶段');
+  }
+  return {
+    ...state,
+    phase: state.mode === 'single' ? 'collecting-returns' : 'choosing-double-tribute',
   };
 }
 

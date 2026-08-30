@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { RoomDealHistory, RoomPlayerView } from '../game/room';
+import type { RoomDealHistory, RoomHistoryEntry, RoomPlayerView } from '../game/room';
 import type { Seat } from '../game/rules/match';
 import type { CardData } from '../game/types';
 import { Icon } from '../ui/Icon';
@@ -40,6 +40,19 @@ function HistoryCard({ card }: { card: CardData }) {
   );
 }
 
+function getHistoryActionLabel(entry: RoomHistoryEntry): string {
+  if (entry.kind === 'pass') {
+    return '不要';
+  }
+  if (entry.kind === 'tribute') {
+    return '进贡';
+  }
+  if (entry.kind === 'return-tribute') {
+    return '还贡';
+  }
+  return entry.description;
+}
+
 export function PlayHistoryDrawer({ history, onClose, players, selfSeat }: PlayHistoryDrawerProps) {
   const latestDealNumber = history.at(-1)?.dealNumber ?? 0;
   const [selectedDealNumber, setSelectedDealNumber] = useState(latestDealNumber);
@@ -57,13 +70,13 @@ export function PlayHistoryDrawer({ history, onClose, players, selfSeat }: PlayH
   }, [history, latestDealNumber, selectedDealNumber]);
 
   return (
-    <aside aria-label="出牌历史" className="history-drawer">
+    <aside aria-label="牌局历史" className="history-drawer">
       <div className="drawer-header">
         <div className="history-title">
           <span>牌桌留痕</span>
-          <strong>出牌历史</strong>
+          <strong>牌局历史</strong>
         </div>
-        <button aria-label="关闭出牌历史" className="icon-button" onClick={onClose} type="button"><Icon name="close" /></button>
+        <button aria-label="关闭牌局历史" className="icon-button" onClick={onClose} type="button"><Icon name="close" /></button>
       </div>
 
       <nav aria-label="选择要查看的牌局" className="history-deal-tabs">
@@ -86,18 +99,25 @@ export function PlayHistoryDrawer({ history, onClose, players, selfSeat }: PlayH
           <div className="history-empty">
             <span aria-hidden="true">留</span>
             <strong>还没有出牌记录</strong>
-            <p>本副牌开始行动后，这里会按最新在前记录出牌与“不要”。</p>
+            <p>本副牌开始行动后，这里会按最新在前记录贡还牌、出牌与“不要”。</p>
           </div>
         ) : newestFirst.map((entry, index) => {
           const player = players.find((candidate) => candidate.seat === entry.player);
           const direction = getTableDirection(selfSeat, entry.player);
+          const kindClass = entry.kind === 'pass'
+            ? ' history-entry-pass'
+            : entry.kind === 'tribute'
+              ? ' history-entry-tribute'
+              : entry.kind === 'return-tribute'
+                ? ' history-entry-return'
+                : '';
           return (
-            <article className={`history-entry${entry.kind === 'pass' ? ' history-entry-pass' : ''}`} key={entry.id}>
+            <article className={`history-entry${kindClass}`} key={entry.id}>
               <div className="history-entry-marker"><span>{newestFirst.length - index}</span></div>
               <div className="history-entry-body">
                 <div className="history-entry-heading">
                   <div><strong>{player?.nickname ?? `座位 ${entry.player + 1}`}</strong><span>{directionLabels[direction]}</span></div>
-                  <em>{entry.kind === 'pass' ? '不要' : entry.description}</em>
+                  <em>{getHistoryActionLabel(entry)}</em>
                 </div>
                 {entry.cards.length > 0 ? (
                   <div className="history-cards">

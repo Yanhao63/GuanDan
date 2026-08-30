@@ -335,6 +335,8 @@ button:focus-visible, input:focus-visible {
 .history-entry:last-child::before { display: none; }
 .history-entry-marker { position: relative; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--brass); border-radius: 50%; color: var(--walnut-deep); background: var(--jade); box-shadow: 0 0 0 3px #05271f; font-size: 10px; font-weight: 700; }
 .history-entry-pass .history-entry-marker { color: var(--brass-bright); background: var(--felt-dark); }
+.history-entry-tribute .history-entry-marker { color: #fff4c8; background: #9a5936; }
+.history-entry-return .history-entry-marker { color: #183c31; background: var(--brass-bright); }
 .history-entry-body { min-width: 0; border: 1px solid #c3a15b4d; border-radius: 11px; padding: 10px 11px; background: #031f19b8; }
 .history-entry-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .history-entry-heading > div { display: flex; min-width: 0; align-items: baseline; gap: 7px; }
@@ -342,6 +344,8 @@ button:focus-visible, input:focus-visible {
 .history-entry-heading span { flex: 0 0 auto; color: var(--muted); font-size: 10px; }
 .history-entry-heading em { flex: 0 0 auto; border: 1px solid #c3a15b66; border-radius: 999px; padding: 2px 7px; color: var(--brass-bright); font-size: 10px; font-style: normal; }
 .history-entry-pass .history-entry-heading em { color: var(--muted); }
+.history-entry-tribute .history-entry-heading em { border-color: #d58a5d99; color: #efb07f; }
+.history-entry-return .history-entry-heading em { border-color: #d7e5cf88; color: #d7e5cf; }
 .history-cards { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; }
 .history-card { display: inline-flex; align-items: center; justify-content: center; gap: 2px; min-width: 34px; height: 29px; border: 1px solid #d4cbb6; border-radius: 5px; padding: 0 4px; color: #171513; background: linear-gradient(145deg, #fffdf4, #dcd4c4); box-shadow: 0 2px 4px #0006; font-family: Georgia, serif; }
 .history-card strong { font-size: 12px; }
@@ -377,6 +381,12 @@ button:focus-visible, input:focus-visible {
 .tribute-cards .poker-card { flex-basis: 68px; width: 68px; height: 98px; margin-left: 8px; }
 .tribute-cards .poker-card:first-child { margin-left: 0; }
 .tribute-cards .poker-card-selected, .tribute-cards .poker-card-selected:hover { transform: translateY(-10px); }
+.tribute-reveal-cards { justify-content: center; min-height: 150px; padding-top: 12px; overflow: visible; }
+.tribute-reveal-cards figure { display: flex; min-width: 108px; flex-direction: column; align-items: center; gap: 8px; margin: 0; }
+.tribute-reveal-cards figure .poker-card { margin: 0; }
+.tribute-reveal-cards figcaption { color: var(--brass-bright); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.tribute-reveal-progress { height: 11px; overflow: hidden; border: 1px solid #e1c778aa; border-radius: 999px; background: #031b16; box-shadow: inset 0 0 0 2px #24170f; }
+.tribute-reveal-progress > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #d15a47, #e4c978 52%, #b9d6b5); box-shadow: 0 0 12px #e1c77899; transition: width 100ms linear; }
 .tribute-confirm { display: block; min-width: 160px; min-height: 40px; margin-left: auto; }
 .tribute-waiting { margin: 12px 0 0; border: 1px solid #c3a15b55; border-radius: 10px; padding: 11px 14px; color: var(--muted); background: #05271f; }
 .tribute-waiting span { color: var(--brass-bright); }

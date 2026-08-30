@@ -85,6 +85,7 @@ export class GameRoom extends DurableObject<Env> {
     const deadlines = [
       this.room?.getNextBotActionDeadline() ?? null,
       this.room?.getNextDisconnectDeadline() ?? null,
+      this.room?.getNextTributeRevealDeadline() ?? null,
       this.room?.getNextTurnDeadline() ?? null,
     ].filter((deadline): deadline is number => deadline !== null);
     if (deadlines.length === 0) {
@@ -284,6 +285,7 @@ export class GameRoom extends DurableObject<Env> {
     }
     const now = Date.now();
     this.room.applyDisconnectTimeouts(now);
+    this.room.applyTributeRevealTimeout(now);
     this.room.applyTurnTimeout(now, (event) => this.broadcastPlayEvent(event));
     this.room.runCurrentBotTurn(now, (event) => this.broadcastPlayEvent(event));
     await this.persist();

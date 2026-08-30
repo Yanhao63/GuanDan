@@ -17,12 +17,14 @@ import {
 import {
   beginTributeRound,
   chooseDoubleTribute,
+  finishTributeReveal,
   getHighestTributeChoices,
   getReturnCardChoices,
   submitReturnCard,
   submitTribute,
   type HandsBySeat,
   type TributeRoundState,
+  type TributeMode,
   type TributeTransition,
 } from './rules/tribute';
 import type { PlainRank, PlayInterpretation } from './rules/types';
@@ -59,6 +61,7 @@ export interface RoomSnapshot {
   settlement?: DealSettlement | null;
   turnDeadline?: number | null;
   tribute?: TributeRoundState | null;
+  tributeRevealDeadline?: number | null;
 }
 
 export interface JoinReceipt {
@@ -86,7 +89,7 @@ export interface RoomPlayEvent {
 
 export interface RoomHistoryEntry extends RoomPlayEvent {
   id: number;
-  kind: 'pass' | 'play';
+  kind: 'pass' | 'play' | 'return-tribute' | 'tribute';
 }
 
 export interface RoomDealHistory {
@@ -121,13 +124,16 @@ export interface RoomView {
   tribute: TributeView | null;
 }
 
-export type TributeAction = 'pay-tribute' | 'choose-double-tribute' | 'return-tribute' | 'waiting';
+export type TributeAction = 'pay-tribute' | 'choose-double-tribute' | 'return-tribute' | 'reveal' | 'waiting';
 
 export interface TributeView {
   action: TributeAction;
   choices: CardData[];
   message: string;
   mode: 'single' | 'double';
+  revealDeadline: number | null;
+  revealDurationMs: number | null;
+  revealedCards: Array<{ card: CardData; source: Seat }>;
 }
 
 export type TokenSource = () => string;
@@ -137,6 +143,12 @@ export type DisconnectEvent =
   | { from: Seat; to: Seat; type: 'host-transfer' };
 
 export const BOT_ACTION_DELAY_MS = 2_500;
+export const SINGLE_TRIBUTE_REVEAL_MS = 6_000;
+export const DOUBLE_TRIBUTE_REVEAL_MS = 6_000;
+
+export function getTributeRevealDurationMs(mode: TributeMode): number {
+  return mode === 'single' ? SINGLE_TRIBUTE_REVEAL_MS : DOUBLE_TRIBUTE_REVEAL_MS;
+}
 
 const INITIAL_PROGRESS: MatchProgress = {
   'team-a': { level: '2', aFailures: 0 },
@@ -172,6 +184,7 @@ export class RoomEngine {
   private trick: TrickState | null = null;
   private turnDeadline: number | null = null;
   private tribute: TributeRoundState | null = null;
+  private tributeRevealDeadline: number | null = null;
 
   constructor(
     private readonly roomCode: string,
@@ -207,11 +220,15 @@ export class RoomEngine {
     room.trick = structuredClone(snapshot.trick);
     room.turnDeadline = snapshot.turnDeadline ?? null;
     room.tribute = structuredClone(snapshot.tribute ?? null);
+    room.tributeRevealDeadline = snapshot.tributeRevealDeadline ?? null;
     if (snapshot.turnDeadline === undefined) {
       room.refreshTurnDeadline();
     }
     if (snapshot.botActionDeadline === undefined) {
       room.refreshBotActionDeadline();
+    }
+    if (snapshot.tributeRevealDeadline === undefined) {
+      room.refreshTributeRevealDeadline();
     }
     return room;
   }
@@ -316,6 +333,7 @@ export class RoomEngine {
       if (member.isHost || this.trick?.currentSeat === member.seat) {
         this.turnDeadline = null;
         this.botActionDeadline = null;
+        this.tributeRevealDeadline = null;
       }
     }
   }
@@ -402,6 +420,7 @@ export class RoomEngine {
     this.trick = createTrickState(leader);
     this.settlement = null;
     this.tribute = null;
+    this.tributeRevealDeadline = null;
     this.phase = 'playing';
     this.beginDealHistory();
     this.refreshAutomationDeadlines(now);
@@ -426,6 +445,7 @@ export class RoomEngine {
     this.trick = null;
     this.settlement = null;
     this.tribute = beginTributeRound(finishOrder, hands, this.level);
+    this.tributeRevealDeadline = null;
     this.phase = 'tribute';
     this.beginDealHistory();
     this.finishTributeIfReady(now);
@@ -441,7 +461,17 @@ export class RoomEngine {
       member.seat,
       cardId,
     );
+    const beginsReveal = transition.state.phase === 'revealing-tributes';
     this.applyTributeTransition(transition, now);
+    if (beginsReveal) {
+      for (const offer of transition.state.offers) {
+        this.recordHistory('tribute', {
+          cards: [offer.card],
+          description: '进贡',
+          player: offer.source,
+        });
+      }
+    }
   }
 
   chooseDoubleTribute(sessionId: string, cardId: string, now = Date.now()): void {
@@ -465,7 +495,15 @@ export class RoomEngine {
       member.seat,
       cardId,
     );
+    const returned = transition.state.returns.find((record) => record.recipient === member.seat);
     this.applyTributeTransition(transition, now);
+    if (returned !== undefined) {
+      this.recordHistory('return-tribute', {
+        cards: [returned.card],
+        description: '还贡',
+        player: returned.recipient,
+      });
+    }
   }
 
   play(sessionId: string, cardIds: string[], description?: string, now = Date.now()): RoomPlayEvent {
@@ -509,6 +547,7 @@ export class RoomEngine {
       this.level = settlement.nextLevel;
       this.settlement = settlement;
       this.tribute = null;
+      this.tributeRevealDeadline = null;
       this.phase = 'complete';
     }
     const event: RoomPlayEvent = {
@@ -643,6 +682,7 @@ export class RoomEngine {
       trick: structuredClone(this.trick),
       turnDeadline: this.turnDeadline,
       tribute: structuredClone(this.tribute),
+      tributeRevealDeadline: this.tributeRevealDeadline,
     };
   }
 
@@ -727,6 +767,26 @@ export class RoomEngine {
 
   getNextBotActionDeadline(): number | null {
     return this.getPause() === null ? this.botActionDeadline : null;
+  }
+
+  getNextTributeRevealDeadline(): number | null {
+    return this.getPause() === null ? this.tributeRevealDeadline : null;
+  }
+
+  applyTributeRevealTimeout(now = Date.now()): boolean {
+    if (
+      this.phase !== 'tribute'
+      || this.tribute?.phase !== 'revealing-tributes'
+      || this.tributeRevealDeadline === null
+      || now < this.tributeRevealDeadline
+      || this.getPause() !== null
+    ) {
+      return false;
+    }
+    this.tribute = finishTributeReveal(this.tribute);
+    this.tributeRevealDeadline = null;
+    this.refreshAutomationDeadlines(now);
+    return true;
   }
 
   applyTurnTimeout(now = Date.now(), onPlay?: (event: RoomPlayEvent) => void): boolean {
@@ -883,12 +943,26 @@ export class RoomEngine {
     }
     this.trick = createTrickState(this.tribute.leader);
     this.phase = 'playing';
+    this.tributeRevealDeadline = null;
     this.refreshAutomationDeadlines(now);
   }
 
   private refreshAutomationDeadlines(now = Date.now()): void {
     this.refreshTurnDeadline(now);
+    this.refreshTributeRevealDeadline(now);
     this.refreshBotActionDeadline(now);
+  }
+
+  private refreshTributeRevealDeadline(now = Date.now()): void {
+    if (
+      this.phase !== 'tribute'
+      || this.tribute?.phase !== 'revealing-tributes'
+      || this.getPause() !== null
+    ) {
+      this.tributeRevealDeadline = null;
+      return;
+    }
+    this.tributeRevealDeadline ??= now + getTributeRevealDurationMs(this.tribute.mode);
   }
 
   private refreshBotActionDeadline(now = Date.now()): void {
@@ -961,6 +1035,9 @@ export class RoomEngine {
     if (this.tribute.phase === 'choosing-double-tribute') {
       return [this.tribute.headSeat];
     }
+    if (this.tribute.phase === 'revealing-tributes') {
+      return [];
+    }
     return this.tribute.assignments
       .filter((assignment) => !this.tribute?.returns.some(
         (record) => record.recipient === assignment.recipient,
@@ -973,16 +1050,38 @@ export class RoomEngine {
       return null;
     }
 
+    const shared: Pick<TributeView, 'mode' | 'revealDeadline' | 'revealDurationMs' | 'revealedCards'> = {
+      mode: this.tribute.mode,
+      revealDeadline: this.tribute.phase === 'revealing-tributes' ? this.tributeRevealDeadline : null,
+      revealDurationMs: this.tribute.phase === 'revealing-tributes'
+        ? getTributeRevealDurationMs(this.tribute.mode)
+        : null,
+      revealedCards: this.tribute.phase === 'revealing-tributes'
+        ? this.tribute.offers.map((offer) => ({ card: { ...offer.card }, source: offer.source }))
+        : [],
+    };
+
+    if (this.tribute.phase === 'revealing-tributes') {
+      return {
+        ...shared,
+        action: 'reveal',
+        choices: [],
+        message: this.tribute.mode === 'single'
+          ? '进贡牌公开展示，随后进入还贡'
+          : '两张贡牌公开展示，随后由头游选择',
+      };
+    }
+
     if (
       this.tribute.phase === 'collecting-tributes'
       && this.tribute.contributorSeats.includes(self.seat)
       && !this.tribute.offers.some((offer) => offer.source === self.seat)
     ) {
       return {
+        ...shared,
         action: 'pay-tribute',
         choices: getHighestTributeChoices(self.hand, this.level),
         message: '请选择手中点数最高且可进贡的牌',
-        mode: this.tribute.mode,
       };
     }
 
@@ -991,10 +1090,10 @@ export class RoomEngine {
       && this.tribute.headSeat === self.seat
     ) {
       return {
+        ...shared,
         action: 'choose-double-tribute',
         choices: this.tribute.offers.map((offer) => offer.card),
         message: '请选择自己要接收的贡牌，另一张自动交给队友',
-        mode: this.tribute.mode,
       };
     }
 
@@ -1004,14 +1103,15 @@ export class RoomEngine {
       && !this.tribute.returns.some((record) => record.recipient === self.seat)
     ) {
       return {
+        ...shared,
         action: 'return-tribute',
         choices: getReturnCardChoices(self.hand),
         message: '请选择一张自然点数 2 至 10 的牌还贡',
-        mode: this.tribute.mode,
       };
     }
 
     return {
+      ...shared,
       action: 'waiting',
       choices: [],
       message: this.tribute.phase === 'collecting-tributes'
@@ -1019,7 +1119,6 @@ export class RoomEngine {
         : this.tribute.phase === 'choosing-double-tribute'
           ? '等待头游分配两张贡牌'
           : '等待接贡方完成还贡',
-      mode: this.tribute.mode,
     };
   }
 

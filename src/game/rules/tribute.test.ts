@@ -3,6 +3,7 @@ import type { CardData, Rank, Suit } from '../types';
 import {
   beginTributeRound,
   chooseDoubleTribute,
+  finishTributeReveal,
   getDoubleTributeLeader,
   getHighestTributeChoices,
   isDoubleTributeResisted,
@@ -96,13 +97,14 @@ describe('tribute and return rules', () => {
 
     expect(paid.state).toMatchObject({
       mode: 'single',
-      phase: 'collecting-returns',
+      phase: 'revealing-tributes',
       recipientSeats: [0],
     });
     expect(paid.hands[0]).toContainEqual(tribute);
     expect(paid.hands[3]).not.toContainEqual(tribute);
 
-    const completed = submitReturnCard(paid.state, paid.hands, 0, returned.id);
+    const revealed = finishTributeReveal(paid.state);
+    const completed = submitReturnCard(revealed, paid.hands, 0, returned.id);
 
     expect(completed.state).toMatchObject({ phase: 'complete', leader: 3 });
     expect(completed.hands[3]).toContainEqual(returned);
@@ -125,10 +127,11 @@ describe('tribute and return rules', () => {
     const firstPaid = submitTribute(started, initialHands, 1, tributeFromSeat1.id);
     const bothPaid = submitTribute(firstPaid.state, firstPaid.hands, 3, tributeFromSeat3.id);
 
-    expect(bothPaid.state.phase).toBe('choosing-double-tribute');
+    expect(bothPaid.state.phase).toBe('revealing-tributes');
+    const revealed = finishTributeReveal(bothPaid.state);
 
     const allocated = chooseDoubleTribute(
-      bothPaid.state,
+      revealed,
       bothPaid.hands,
       0,
       tributeFromSeat3.id,
@@ -190,6 +193,7 @@ describe('tribute and return rules', () => {
     expect(() => submitTribute(started, initialHands, 3, lowTribute.id)).toThrow(/最高/);
 
     const paid = submitTribute(started, initialHands, 3, highestTribute.id);
-    expect(() => submitReturnCard(paid.state, paid.hands, 0, invalidReturn.id)).toThrow(/2 至 10/);
+    const revealed = finishTributeReveal(paid.state);
+    expect(() => submitReturnCard(revealed, paid.hands, 0, invalidReturn.id)).toThrow(/2 至 10/);
   });
 });

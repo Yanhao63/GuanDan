@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import type { TributeAction, TributeView } from '../game/room';
+import type { RoomPlayerView, TributeAction, TributeView } from '../game/room';
 import type { PlainRank } from '../game/rules/types';
 import { PokerCard } from './PokerCard';
+import { TributeRevealProgressBar } from './TributeRevealProgressBar';
 
-type ActiveTributeAction = Exclude<TributeAction, 'waiting'>;
+type ActiveTributeAction = Exclude<TributeAction, 'reveal' | 'waiting'>;
 
 interface TributeOverlayProps {
   level: PlainRank;
   onAction: (action: ActiveTributeAction, cardId: string) => void;
+  players: RoomPlayerView[];
   tribute: TributeView;
 }
 
@@ -17,12 +19,15 @@ const actionLabels: Record<ActiveTributeAction, string> = {
   'return-tribute': '确认还贡',
 };
 
-export function TributeOverlay({ level, onAction, tribute }: TributeOverlayProps) {
+export function TributeOverlay({ level, onAction, players, tribute }: TributeOverlayProps) {
   const [selectedId, setSelectedId] = useState('');
-  const activeAction: ActiveTributeAction | null = tribute.action === 'waiting'
-    ? null
-    : tribute.action;
-  const isWaiting = activeAction === null;
+  const isReveal = tribute.action === 'reveal';
+  const isWaiting = tribute.action === 'waiting';
+  const activeAction: ActiveTributeAction | null = tribute.action === 'pay-tribute'
+    || tribute.action === 'choose-double-tribute'
+    || tribute.action === 'return-tribute'
+    ? tribute.action
+    : null;
 
   const confirm = () => {
     if (activeAction === null || selectedId.length === 0) {
@@ -38,12 +43,30 @@ export function TributeOverlay({ level, onAction, tribute }: TributeOverlayProps
           <span className="tribute-seal" aria-hidden="true">贡</span>
           <div>
             <p className="eyebrow">{tribute.mode === 'double' ? '双贡流程' : '单贡流程'}</p>
-            <h2 id="tribute-title">贡还牌</h2>
+            <h2 id="tribute-title">{isReveal ? '贡牌公开' : '贡还牌'}</h2>
           </div>
         </header>
         <p className="modal-description">{tribute.message}</p>
 
-        {isWaiting ? (
+        {isReveal && tribute.revealDeadline !== null && tribute.revealDurationMs !== null ? (
+          <>
+            <div className="tribute-cards tribute-reveal-cards" aria-label={`公开的贡牌，共 ${tribute.revealedCards.length} 张`}>
+              {tribute.revealedCards.map((offer, index) => (
+                <figure key={offer.card.id}>
+                  <PokerCard
+                    card={offer.card}
+                    index={index}
+                    level={level}
+                    onToggle={() => undefined}
+                    selected={false}
+                  />
+                  <figcaption>{players.find((player) => player.seat === offer.source)?.nickname ?? `座位 ${offer.source + 1}`} 进贡</figcaption>
+                </figure>
+              ))}
+            </div>
+            <TributeRevealProgressBar deadline={tribute.revealDeadline} durationMs={tribute.revealDurationMs} />
+          </>
+        ) : isWaiting ? (
           <div className="tribute-waiting"><span aria-hidden="true">◇</span> 正在等待其他玩家</div>
         ) : tribute.choices.length > 0 ? (
           <>

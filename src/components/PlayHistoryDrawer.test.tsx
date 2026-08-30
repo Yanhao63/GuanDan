@@ -20,13 +20,22 @@ const history: RoomDealHistory[] = [
   },
   {
     dealNumber: 5,
-    entries: [{
-      cards: [{ deck: 1, id: '5-club', rank: '5', suit: 'clubs' }],
-      description: '单张 5',
-      id: 2,
-      kind: 'play',
-      player: 1,
-    }],
+    entries: [
+      {
+        cards: [{ deck: 1, id: '5-club', rank: '5', suit: 'clubs' }],
+        description: '单张 5',
+        id: 2,
+        kind: 'play',
+        player: 1,
+      },
+      {
+        cards: [{ deck: 1, id: 'ace-spade', rank: 'A', suit: 'spades' }],
+        description: '进贡',
+        id: 3,
+        kind: 'tribute',
+        player: 3,
+      },
+    ],
   },
 ];
 
@@ -42,6 +51,8 @@ describe('play history drawer', () => {
     expect(markup).toContain('乙');
     expect(markup).toContain('右手边');
     expect(markup).toContain('单张 5');
+    expect(markup).toContain('进贡');
+    expect(markup).toContain('history-entry-tribute');
     expect(markup).not.toContain('选择不要，轮到下一位');
   });
 });
