@@ -21,4 +21,13 @@ describe('sortDemoHand', () => {
     expect(sorted.slice(0, 4).map((card) => card.rank)).toEqual(['大王', '小王', 'A', 'A']);
     expect(demoHand.map((card) => card.id)).toEqual(originalOrder);
   });
+
+  it('keeps an ordinary 2 below A when another rank is the level', () => {
+    const sorted = sortDemoHand(demoHand, '5');
+    const ranks = sorted.map((card) => card.rank);
+
+    expect(ranks.slice(0, 3)).toEqual(['大王', '小王', '5']);
+    expect(ranks.indexOf('A')).toBeLessThan(ranks.indexOf('2'));
+    expect(ranks.at(-1)).toBe('2');
+  });
 });

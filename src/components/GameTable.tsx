@@ -285,6 +285,7 @@ export function GameTable({
             <DirectionalPlay
               activeEvent={activePlayEvent}
               fallbackPlay={view.lastPlay}
+              level={view.level}
               onAnimationComplete={onPlayAnimationComplete}
               selfSeat={view.selfSeat}
             />
@@ -324,6 +325,7 @@ export function GameTable({
                 dragTarget={draggingId !== null && dragTargetId === card.id}
                 index={index}
                 key={card.id}
+                level={view.level}
                 onToggle={toggleCard}
                 reorderable
                 selected={selectedIds.includes(card.id)}
@@ -345,6 +347,7 @@ export function GameTable({
         {view.pause === null && view.tribute !== null ? (
           <TributeOverlay
             key={view.tribute.action}
+            level={view.level}
             onAction={onTributeAction}
             tribute={view.tribute}
           />

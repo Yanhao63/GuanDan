@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import type { TributeAction, TributeView } from '../game/room';
+import type { PlainRank } from '../game/rules/types';
 import { PokerCard } from './PokerCard';
 
 type ActiveTributeAction = Exclude<TributeAction, 'waiting'>;
 
 interface TributeOverlayProps {
+  level: PlainRank;
   onAction: (action: ActiveTributeAction, cardId: string) => void;
   tribute: TributeView;
 }
@@ -15,7 +17,7 @@ const actionLabels: Record<ActiveTributeAction, string> = {
   'return-tribute': '确认还贡',
 };
 
-export function TributeOverlay({ onAction, tribute }: TributeOverlayProps) {
+export function TributeOverlay({ level, onAction, tribute }: TributeOverlayProps) {
   const [selectedId, setSelectedId] = useState('');
   const activeAction: ActiveTributeAction | null = tribute.action === 'waiting'
     ? null
@@ -47,6 +49,7 @@ export function TributeOverlay({ onAction, tribute }: TributeOverlayProps) {
                   card={card}
                   index={index}
                   key={card.id}
+                  level={level}
                   onToggle={setSelectedId}
                   selected={selectedId === card.id}
                 />

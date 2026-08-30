@@ -23,7 +23,7 @@ export function WildcardModal({ onCancel, onConfirm, options }: WildcardModalPro
     <div className="modal-backdrop" role="presentation">
       <section aria-labelledby="wildcard-title" aria-modal="true" className="game-modal" role="dialog">
         <div className="modal-crest" aria-hidden="true">♥</div>
-        <p className="eyebrow">红桃级牌 · 百搭</p>
+        <p className="eyebrow">红桃级牌 · 赖子</p>
         <h2 id="wildcard-title">请选择这手牌的解释</h2>
         <p className="modal-description">这组牌存在多种合法解释。请选择本次出牌的确切含义。</p>
         <div className="wildcard-options">

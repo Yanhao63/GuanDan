@@ -23,6 +23,7 @@ describe('table activity directions', () => {
       createElement(DirectionalPlay, {
         activeEvent: { cards: [], description: '不要', id: 'pass-1', player: 1 },
         fallbackPlay: null,
+        level: '2',
         onAnimationComplete: () => undefined,
         selfSeat: 0,
       }),

@@ -1,4 +1,6 @@
 import type { CardData, Rank, Suit } from './types';
+import { getRankStrength } from './rules/ranks';
+import type { PlainRank } from './rules/types';
 
 const card = (rank: Rank, suit: Suit, deck: 1 | 2): CardData => ({
   id: `${deck}-${suit}-${rank}`,
@@ -37,37 +39,11 @@ export const demoHand: CardData[] = [
   card('2', 'clubs', 1),
 ];
 
-const naturalRanks: Rank[] = [
-  '3',
-  '4',
-  '5',
-  '6',
-  '7',
-  '8',
-  '9',
-  '10',
-  'J',
-  'Q',
-  'K',
-  'A',
-  '2',
-  '小王',
-  '大王',
-];
-
 const suitOrder: Suit[] = ['spades', 'hearts', 'clubs', 'diamonds', 'joker'];
 
-export function sortDemoHand(cards: CardData[], level: Rank): CardData[] {
-  const ranksWithoutLevel = naturalRanks.filter((rank) => rank !== level);
-  const levelIndex = ranksWithoutLevel.indexOf('小王');
-  const orderedRanks = [
-    ...ranksWithoutLevel.slice(0, levelIndex),
-    level,
-    ...ranksWithoutLevel.slice(levelIndex),
-  ];
-
+export function sortDemoHand(cards: CardData[], level: PlainRank): CardData[] {
   return [...cards].sort((left, right) => {
-    const rankDifference = orderedRanks.indexOf(right.rank) - orderedRanks.indexOf(left.rank);
+    const rankDifference = getRankStrength(right.rank, level) - getRankStrength(left.rank, level);
     if (rankDifference !== 0) {
       return rankDifference;
     }

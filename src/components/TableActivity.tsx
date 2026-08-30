@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { NetworkPlayEvent } from '../game/network';
 import type { RoomPlayEvent } from '../game/room';
 import type { Seat } from '../game/rules/match';
+import type { PlainRank } from '../game/rules/types';
 import { PokerCard } from './PokerCard';
 
 export type TableDirection = 'self' | 'right' | 'top' | 'left';
@@ -49,6 +50,7 @@ export function TurnIndicator({ direction, nickname }: TurnIndicatorProps) {
 interface DirectionalPlayProps {
   activeEvent: NetworkPlayEvent | null;
   fallbackPlay: RoomPlayEvent | null;
+  level: PlainRank;
   onAnimationComplete: () => void;
   selfSeat: Seat;
 }
@@ -56,6 +58,7 @@ interface DirectionalPlayProps {
 export function DirectionalPlay({
   activeEvent,
   fallbackPlay,
+  level,
   onAnimationComplete,
   selfSeat,
 }: DirectionalPlayProps) {
@@ -105,7 +108,7 @@ export function DirectionalPlay({
         className="played-card"
         style={{ transform: `translateX(${index * 34}px) rotate(${(index - 1) * 2}deg)` }}
       >
-        <PokerCard card={card} index={index} onToggle={() => undefined} selected={false} />
+        <PokerCard card={card} index={index} level={level} onToggle={() => undefined} selected={false} />
       </div>
     </div>
   ));
