@@ -32,4 +32,19 @@ describe('table activity directions', () => {
     expect(markup).toContain('pass-flight played-card-from-right');
     expect(markup).toContain('不要');
   });
+
+  it('uses the 钊 table seal while waiting for the first play', () => {
+    const markup = renderToStaticMarkup(
+      createElement(DirectionalPlay, {
+        activeEvent: null,
+        fallbackPlay: null,
+        level: '2',
+        onAnimationComplete: () => undefined,
+        selfSeat: 0,
+      }),
+    );
+
+    expect(markup).toContain('<span>钊</span>');
+    expect(markup).not.toContain('<span>贯</span>');
+  });
 });

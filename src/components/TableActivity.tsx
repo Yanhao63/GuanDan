@@ -78,7 +78,7 @@ export function DirectionalPlay({
   if (displayedPlay === null || direction === null) {
     return (
       <div className="table-seal" aria-hidden="true">
-        <span>贯</span><small>以牌会友</small>
+        <span>钊</span><small>以牌会友</small>
       </div>
     );
   }
