@@ -20,6 +20,17 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
 
 const STORAGE_KEY = 'guandan-audio-settings';
 
+export const DEFAULT_BGM_PATTERN = {
+  bass: [261.63, 349.23, 392, 261.63, 349.23, 392, 440, 392],
+  beatSeconds: 0.48,
+  melody: [
+    523.25, 659.25, 783.99, 880, 783.99, 659.25, 587.33, 659.25,
+    698.46, 880, 1046.5, 880, 783.99, 698.46, 659.25, 783.99,
+    523.25, 659.25, 783.99, 1046.5, 987.77, 880, 783.99, 659.25,
+    698.46, 783.99, 880, 783.99, 659.25, 587.33, 523.25, 659.25,
+  ],
+} as const;
+
 function clampVolume(value: number): number {
   return Number.isFinite(value) ? Math.min(100, Math.max(0, Math.round(value))) : 0;
 }
@@ -158,22 +169,35 @@ class GameAudio {
 
   private createBackgroundBuffer(): AudioBuffer {
     const context = this.context as AudioContext;
-    const duration = 18;
+    const { bass, beatSeconds, melody } = DEFAULT_BGM_PATTERN;
+    const duration = melody.length * beatSeconds;
     const buffer = context.createBuffer(1, context.sampleRate * duration, context.sampleRate);
     const channel = buffer.getChannelData(0);
-    const notes = [261.63, 329.63, 392, 523.25, 392, 329.63, 293.66, 392, 440, 587.33, 523.25, 392];
 
-    notes.forEach((frequency, index) => {
-      const start = Math.floor((index * 1.5 + 0.2) * context.sampleRate);
-      const length = Math.floor(1.35 * context.sampleRate);
+    melody.forEach((frequency, index) => {
+      const start = Math.floor((index * beatSeconds + 0.06) * context.sampleRate);
+      const length = Math.floor(beatSeconds * 0.82 * context.sampleRate);
       for (let sample = 0; sample < length && start + sample < channel.length; sample += 1) {
         const time = sample / context.sampleRate;
-        const envelope = Math.min(1, time * 18) * Math.exp(-time * 2.45);
+        const envelope = Math.min(1, time * 42) * Math.exp(-time * 5.2);
         channel[start + sample] += (
           Math.sin(2 * Math.PI * frequency * time)
-          + 0.28 * Math.sin(2 * Math.PI * frequency * 2 * time)
-          + 0.12 * Math.sin(2 * Math.PI * frequency * 3 * time)
-        ) * envelope * 0.11;
+          + 0.2 * Math.sin(2 * Math.PI * frequency * 2 * time)
+          + 0.07 * Math.sin(2 * Math.PI * frequency * 3 * time)
+        ) * envelope * 0.075;
+      }
+    });
+
+    bass.forEach((frequency, index) => {
+      const start = Math.floor(index * beatSeconds * 4 * context.sampleRate);
+      const length = Math.floor(beatSeconds * 3.4 * context.sampleRate);
+      for (let sample = 0; sample < length && start + sample < channel.length; sample += 1) {
+        const time = sample / context.sampleRate;
+        const envelope = Math.min(1, time * 12) * Math.exp(-time * 1.9);
+        channel[start + sample] += (
+          Math.sin(2 * Math.PI * frequency * time)
+          + 0.12 * Math.sin(2 * Math.PI * frequency * 2 * time)
+        ) * envelope * 0.035;
       }
     });
     return buffer;
