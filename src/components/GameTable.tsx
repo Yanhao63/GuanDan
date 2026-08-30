@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { gameAudio, loadAudioSettings, type AudioSettings } from '../audio/gameAudio';
+import { describePlayForSpeech } from '../audio/playAnnouncement';
 import { sortDemoHand } from '../game/demoCards';
 import { classifyPlay } from '../game/rules/classify';
 import { applyHandOrder, moveCardAtTarget, type CardDropPlacement } from '../game/handOrder';
@@ -133,7 +134,7 @@ export function GameTable({
       return;
     }
     gameAudio.playEffect('play');
-    gameAudio.announce(activePlayEvent.description);
+    gameAudio.announce(describePlayForSpeech(activePlayEvent));
   }, [activePlayEvent?.id]);
 
   useEffect(() => {
