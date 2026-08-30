@@ -6,13 +6,24 @@ interface QuickChatDrawerProps {
   onSend: (message: string) => void;
 }
 
-const phrases = ['大家好，准备开始吧！', '出得漂亮。', '稍等一下，我想想。', '合作愉快！', '再来一局！'];
-const emojis = [
+export const quickPhrases = [
+  '大家好，准备开始吧！',
+  '出得漂亮。',
+  '稍等一下，我想想。',
+  '合作愉快！',
+  '再来一局！',
+  'NB',
+  '快点出',
+  '杀!!!!!',
+  '你的炸太大了',
+];
+export const quickEmojis = [
   { icon: '🙂', label: '微笑' },
   { icon: '👍', label: '赞' },
   { icon: '👏', label: '鼓掌' },
   { icon: '🤔', label: '思考' },
   { icon: '✨', label: '加油' },
+  { icon: '💩', label: '大便' },
 ];
 
 export function QuickChatDrawer({ onClose, onSend }: QuickChatDrawerProps) {
@@ -28,13 +39,12 @@ export function QuickChatDrawer({ onClose, onSend }: QuickChatDrawerProps) {
         <button className={tab === 'phrases' ? 'drawer-tab drawer-tab-active' : 'drawer-tab'} onClick={() => setTab('phrases')} type="button"><Icon name="chat" size={18} /> 快捷语</button>
         <button className={tab === 'emojis' ? 'drawer-tab drawer-tab-active' : 'drawer-tab'} onClick={() => setTab('emojis')} type="button"><Icon name="smile" size={18} /> 表情</button>
       </div>
-      <div className="drawer-list">
-        {tab === 'phrases' ? phrases.map((phrase) => (
+      <div className={`drawer-list${tab === 'emojis' ? ' drawer-emoji-grid' : ''}`}>
+        {tab === 'phrases' ? quickPhrases.map((phrase) => (
           <button key={phrase} onClick={() => onSend(phrase)} type="button">{phrase}</button>
-        )) : emojis.map((emoji) => (
-          <button className="emoji-option" key={emoji.label} onClick={() => onSend(`${emoji.icon} ${emoji.label}`)} type="button">
+        )) : quickEmojis.map((emoji) => (
+          <button aria-label={emoji.label} className="emoji-option" key={emoji.label} onClick={() => onSend(emoji.icon)} type="button">
             <span aria-hidden="true">{emoji.icon}</span>
-            {emoji.label}
           </button>
         ))}
       </div>
