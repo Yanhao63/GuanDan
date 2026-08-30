@@ -18,7 +18,10 @@ export function PlayerSeat({
   status = '思考中',
 }: PlayerSeatProps) {
   return (
-    <section className={`player-seat player-seat-${position}${isActive ? ' player-seat-active' : ''}`}>
+    <section
+      aria-current={isActive ? 'true' : undefined}
+      className={`player-seat player-seat-${position}${isActive ? ' player-seat-active' : ''}`}
+    >
       <div className="seat-avatar">
         <span aria-hidden="true">{name.slice(0, 1)}</span>
         {isActive ? <span className="countdown-ring" /> : null}

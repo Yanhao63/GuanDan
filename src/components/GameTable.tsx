@@ -292,7 +292,7 @@ export function GameTable({
           </div>
         </div>
 
-        <section className={`self-area${isSelfTurn ? ' self-area-active' : ''}`}>
+        <section aria-current={isSelfTurn ? 'true' : undefined} className={`self-area${isSelfTurn ? ' self-area-active' : ''}`}>
           <div className="self-status">
             <div className="self-avatar">{selfPlayer.nickname.slice(0, 1)}</div>
             <div><strong>{selfPlayer.nickname}</strong><span>{selfPlayer.isHost ? '本家 · 房主' : '本家'}</span></div>
