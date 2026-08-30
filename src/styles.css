@@ -235,7 +235,11 @@ button:focus-visible, input:focus-visible {
 .turn-indicator-self { border-color: #d7e5cf; box-shadow: 0 12px 30px #0009, 0 0 24px #d7e5cf66; }
 .round-state { text-align: center; }
 .round-state span { display: block; color: var(--brass); font-size: clamp(10px, .7vw, 13px); letter-spacing: .18em; }
-.round-state strong { display: block; margin-top: 5px; font-size: clamp(13px, .9vw, 17px); font-weight: 500; }
+.round-state-detail { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 5px; }
+.round-state-detail > strong { font-size: clamp(13px, .9vw, 17px); font-weight: 500; }
+.round-state .table-play-owner { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e1c77899; border-radius: 999px; padding: 4px 9px; color: var(--muted); background: #05271fe6; box-shadow: 0 4px 12px #0006; font-size: clamp(9px, .62vw, 12px); letter-spacing: 0; white-space: nowrap; }
+.round-state .table-play-owner > span { display: inline; color: var(--brass-bright); font-size: .82em; letter-spacing: .08em; }
+.round-state .table-play-owner > strong { color: var(--ink); font-weight: 700; }
 .played-cards { position: relative; display: grid; place-items: center; height: 80%; }
 .table-seal { display: grid; place-items: center; width: clamp(92px, 7vw, 136px); aspect-ratio: 1; border: 1px solid #c3a15b55; border-radius: 50%; color: #c3a15b66; box-shadow: inset 0 0 0 7px #07372c, inset 0 0 0 8px #c3a15b2e; }
 .table-seal span { font: 700 clamp(38px, 3vw, 58px) STSong, serif; }

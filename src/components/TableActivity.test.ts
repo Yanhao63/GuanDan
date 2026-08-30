@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DirectionalPlay, getTableDirection } from './TableActivity';
+import { DirectionalPlay, getTableDirection, TablePlayOwner } from './TableActivity';
 
 describe('table activity directions', () => {
   it('maps every seat to the correct direction from the local player', () => {
@@ -46,5 +46,12 @@ describe('table activity directions', () => {
 
     expect(markup).toContain('<span>钊</span>');
     expect(markup).not.toContain('<span>贯</span>');
+  });
+
+  it('keeps the last effective play owner visible through later passes', () => {
+    const markup = renderToStaticMarkup(createElement(TablePlayOwner, { nickname: '听雨' }));
+
+    expect(markup).toContain('当前桌面牌由 听雨 打出');
+    expect(markup).toContain('听雨 出的');
   });
 });

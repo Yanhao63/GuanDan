@@ -19,7 +19,7 @@ import { PlayerSeat } from './PlayerSeat';
 import { PlayHistoryDrawer } from './PlayHistoryDrawer';
 import { PokerCard } from './PokerCard';
 import { QuickChatDrawer } from './QuickChatDrawer';
-import { DirectionalPlay, getTableDirection, TurnIndicator } from './TableActivity';
+import { DirectionalPlay, getTableDirection, TablePlayOwner, TurnIndicator } from './TableActivity';
 import { TopHud } from './TopHud';
 import { TributeOverlay } from './TributeOverlay';
 import { TurnProgressBar } from './TurnProgressBar';
@@ -110,6 +110,7 @@ export function GameTable({
   const rightPlayer = playerAt(view, relativeSeat(view.selfSeat, 1));
   const selfPlayer = playerAt(view, view.selfSeat);
   const currentPlayer = view.currentSeat === null ? null : playerAt(view, view.currentSeat);
+  const tablePlayOwner = view.lastPlay === null ? null : playerAt(view, view.lastPlay.player);
   const currentDirection = currentPlayer === null
     ? null
     : getTableDirection(view.selfSeat, currentPlayer.seat);
@@ -290,7 +291,10 @@ export function GameTable({
           ) : null}
           <div className="round-state">
             <span>本轮牌面</span>
-            <strong>{tableMessage}</strong>
+            <div className="round-state-detail">
+              <strong>{tableMessage}</strong>
+              {tablePlayOwner === null ? null : <TablePlayOwner nickname={tablePlayOwner.nickname} />}
+            </div>
           </div>
           <div className="played-cards">
             <DirectionalPlay

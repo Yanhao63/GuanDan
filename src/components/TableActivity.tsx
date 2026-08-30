@@ -47,6 +47,15 @@ export function TurnIndicator({ direction, nickname }: TurnIndicatorProps) {
   );
 }
 
+export function TablePlayOwner({ nickname }: { nickname: string }) {
+  return (
+    <span aria-label={`当前桌面牌由 ${nickname} 打出`} className="table-play-owner">
+      <span>桌面牌</span>
+      <strong>{nickname} 出的</strong>
+    </span>
+  );
+}
+
 interface DirectionalPlayProps {
   activeEvent: NetworkPlayEvent | null;
   fallbackPlay: RoomPlayEvent | null;
