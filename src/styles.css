@@ -271,9 +271,14 @@ button:focus-visible, input:focus-visible {
 .hand-rack:not(.hand-rack-dragging) .poker-card:hover { margin-right: clamp(30px, 2.65vw, 51px); margin-left: 0; }
 .poker-card-selected { transform: translateY(-24px); box-shadow: 0 0 0 2px var(--brass-bright), 0 10px 22px #000a, 0 0 18px #e1c77866; }
 .poker-card-selected:hover { transform: translateY(-26px); }
-.poker-card-dragging { opacity: .42; cursor: grabbing; }
-.poker-card-drag-target { box-shadow: -4px 0 0 var(--brass-bright), 0 5px 10px #0008; }
-.hand-rack-dragging .poker-card { cursor: grabbing; }
+.poker-card-dragging { z-index: 90; opacity: .72; box-shadow: 0 0 0 3px var(--brass-bright), 0 18px 32px #000c, 0 0 28px #e1c77899; cursor: grabbing; animation: card-drag-lift 700ms ease-in-out infinite alternate; }
+.poker-card-drag-target { box-shadow: 0 0 0 3px var(--brass-bright), 0 10px 22px #000a, 0 0 22px #e1c77877; animation: card-drop-target 650ms ease-in-out infinite alternate; }
+.poker-card-drag-target::before { position: absolute; z-index: 3; top: 5px; bottom: 5px; width: 5px; border-radius: 999px; background: #f4dc91; box-shadow: 0 0 10px #f4dc91; content: ''; }
+.poker-card-drag-target-before { margin-left: calc(-1 * clamp(30px, 2.65vw, 51px) + clamp(20px, 1.8vw, 34px)); }
+.poker-card-drag-target-before::before { left: 3px; }
+.poker-card-drag-target-after { margin-right: clamp(20px, 1.8vw, 34px); }
+.poker-card-drag-target-after::before { right: 3px; }
+.hand-rack-dragging .poker-card { cursor: grabbing; transition-duration: 240ms; }
 .poker-card-red { color: var(--poker-red); }
 .card-corner { position: absolute; top: 5px; left: 6px; display: flex; flex-direction: column; align-items: center; line-height: .9; }
 .card-corner strong { max-width: 30px; font: 700 clamp(12px, .95vw, 18px)/1 STSong, serif; text-align: center; }
@@ -375,6 +380,14 @@ button:focus-visible, input:focus-visible {
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes modal-in { from { opacity: 0; transform: translateY(10px) scale(.98); } }
 @keyframes countdown { to { transform: rotate(-360deg); } }
+@keyframes card-drag-lift {
+  from { transform: translateY(-28px) scale(1.05) rotate(-1deg); }
+  to { transform: translateY(-35px) scale(1.09) rotate(1deg); }
+}
+@keyframes card-drop-target {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.16); }
+}
 @keyframes card-from-top {
   from { opacity: 0; transform: translate3d(0, -280px, 0) scale(.72) rotate(-5deg); }
   72% { opacity: 1; transform: translate3d(0, 12px, 0) scale(1.03) rotate(1deg); }

@@ -1,10 +1,12 @@
 import type { CSSProperties } from 'react';
+import type { CardDropPlacement } from '../game/handOrder';
 import type { PlainRank } from '../game/rules/types';
 import type { CardData } from '../game/types';
 
 interface PokerCardProps {
   card: CardData;
   dragging?: boolean;
+  dragPlacement?: CardDropPlacement;
   dragTarget?: boolean;
   index: number;
   level: PlainRank;
@@ -24,6 +26,7 @@ const suitGlyph = {
 export function PokerCard({
   card,
   dragging = false,
+  dragPlacement = 'before',
   dragTarget = false,
   index,
   level,
@@ -39,8 +42,9 @@ export function PokerCard({
     <button
       aria-label={`${isWild ? '赖子' : ''}${card.rank}${card.suit === 'joker' ? '' : suitGlyph[card.suit]}`}
       aria-pressed={selected}
-      className={`poker-card${isRed ? ' poker-card-red' : ''}${selected ? ' poker-card-selected' : ''}${isWild ? ' poker-card-wild' : ''}${dragging ? ' poker-card-dragging' : ''}${dragTarget ? ' poker-card-drag-target' : ''}`}
+      className={`poker-card${isRed ? ' poker-card-red' : ''}${selected ? ' poker-card-selected' : ''}${isWild ? ' poker-card-wild' : ''}${dragging ? ' poker-card-dragging' : ''}${dragTarget ? ` poker-card-drag-target poker-card-drag-target-${dragPlacement}` : ''}`}
       data-card-id={card.id}
+      data-drop-placement={dragTarget ? dragPlacement : undefined}
       draggable={false}
       onClick={() => onToggle(card.id)}
       style={style}

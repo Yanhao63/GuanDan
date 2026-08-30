@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CardData } from './types';
-import { applyHandOrder, moveCardBefore } from './handOrder';
+import { applyHandOrder, moveCardAtTarget } from './handOrder';
 
 const cards = ['a', 'b', 'c'].map((id, index) => ({
   deck: 1,
@@ -19,7 +19,11 @@ describe('local hand ordering', () => {
   });
 
   it('moves a dragged card immediately before its target', () => {
-    expect(moveCardBefore(['a', 'b', 'c'], 'c', 'a')).toEqual(['c', 'a', 'b']);
-    expect(moveCardBefore(['a', 'b', 'c'], 'a', 'c')).toEqual(['b', 'a', 'c']);
+    expect(moveCardAtTarget(['a', 'b', 'c'], 'c', 'a', 'before')).toEqual(['c', 'a', 'b']);
+    expect(moveCardAtTarget(['a', 'b', 'c'], 'a', 'c', 'before')).toEqual(['b', 'a', 'c']);
+  });
+
+  it('moves a dragged card after the rightmost target', () => {
+    expect(moveCardAtTarget(['a', 'b', 'c'], 'a', 'c', 'after')).toEqual(['b', 'c', 'a']);
   });
 });

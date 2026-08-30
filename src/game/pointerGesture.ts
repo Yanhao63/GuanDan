@@ -1,6 +1,9 @@
+import type { CardDropPlacement } from './handOrder';
+
 export interface PointerDragState {
   active: boolean;
   cardId: string;
+  placement: CardDropPlacement;
   startX: number;
   startY: number;
   targetId: string;
@@ -17,6 +20,7 @@ export function createPointerDrag(cardId: string, x: number, y: number): Pointer
   return {
     active: false,
     cardId,
+    placement: 'before',
     startX: x,
     startY: y,
     targetId: cardId,
@@ -28,6 +32,7 @@ export function updatePointerDrag(
   x: number,
   y: number,
   targetId?: string,
+  placement?: CardDropPlacement,
 ): PointerDragUpdate {
   const started = !current.active
     && Math.hypot(x - current.startX, y - current.startY) >= DRAG_THRESHOLD_PX;
@@ -36,6 +41,7 @@ export function updatePointerDrag(
     state: {
       ...current,
       active: current.active || started,
+      placement: placement ?? current.placement,
       targetId: targetId ?? current.targetId,
     },
   };

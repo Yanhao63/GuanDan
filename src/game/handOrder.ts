@@ -13,12 +13,19 @@ export function applyHandOrder(cards: CardData[], order: string[]): CardData[] {
   return [...ordered, ...cards.filter((card) => cardsById.has(card.id))];
 }
 
-export function moveCardBefore(order: string[], draggedId: string, targetId: string): string[] {
+export type CardDropPlacement = 'before' | 'after';
+
+export function moveCardAtTarget(
+  order: string[],
+  draggedId: string,
+  targetId: string,
+  placement: CardDropPlacement,
+): string[] {
   if (draggedId === targetId || !order.includes(draggedId) || !order.includes(targetId)) {
     return order;
   }
   const next = order.filter((id) => id !== draggedId);
   const targetIndex = next.indexOf(targetId);
-  next.splice(targetIndex, 0, draggedId);
+  next.splice(placement === 'after' ? targetIndex + 1 : targetIndex, 0, draggedId);
   return next;
 }

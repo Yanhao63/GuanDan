@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { gameAudio, loadAudioSettings, type AudioSettings } from '../audio/gameAudio';
 import { sortDemoHand } from '../game/demoCards';
 import { classifyPlay } from '../game/rules/classify';
-import { applyHandOrder, moveCardBefore } from '../game/handOrder';
+import { applyHandOrder, moveCardAtTarget, type CardDropPlacement } from '../game/handOrder';
 import {
   createPointerDrag,
   updatePointerDrag,
@@ -90,6 +90,7 @@ export function GameTable({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [handOrder, setHandOrder] = useState<string[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragPlacement, setDragPlacement] = useState<CardDropPlacement>('before');
   const [dragTargetId, setDragTargetId] = useState<string | null>(null);
   const pointerDragRef = useRef<PointerDragState | null>(null);
   const suppressToggleRef = useRef(false);
@@ -169,31 +170,38 @@ export function GameTable({
     }
     const target = document.elementFromPoint(event.clientX, event.clientY)
       ?.closest<HTMLElement>('[data-card-id]');
+    const targetBounds = target?.getBoundingClientRect();
+    const placement: CardDropPlacement | undefined = targetBounds === undefined
+      ? undefined
+      : event.clientX >= targetBounds.left + targetBounds.width / 2 ? 'after' : 'before';
     const update = updatePointerDrag(
       drag,
       event.clientX,
       event.clientY,
       target?.dataset.cardId,
+      placement,
     );
     pointerDragRef.current = update.state;
     if (update.started) {
       event.currentTarget.setPointerCapture(event.pointerId);
       setHandOrder(hand.map((card) => card.id));
       setDraggingId(update.state.cardId);
-      setDragTargetId(update.state.cardId);
+      setDragTargetId(update.state.targetId);
+      setDragPlacement(update.state.placement);
     }
     if (!update.state.active) {
       return;
     }
-    if (update.state.targetId !== drag.targetId) {
+    if (update.state.targetId !== drag.targetId || update.state.placement !== drag.placement) {
       setDragTargetId(update.state.targetId);
+      setDragPlacement(update.state.placement);
     }
   };
 
   const finishPointerDrag = () => {
     const drag = pointerDragRef.current;
     if (drag?.active) {
-      setHandOrder((current) => moveCardBefore(current, drag.cardId, drag.targetId));
+      setHandOrder((current) => moveCardAtTarget(current, drag.cardId, drag.targetId, drag.placement));
       suppressToggleRef.current = true;
       window.setTimeout(() => {
         suppressToggleRef.current = false;
@@ -202,6 +210,7 @@ export function GameTable({
     pointerDragRef.current = null;
     setDraggingId(null);
     setDragTargetId(null);
+    setDragPlacement('before');
   };
 
   const sortHand = () => {
@@ -321,7 +330,8 @@ export function GameTable({
               <PokerCard
                 card={card}
                 dragging={draggingId === card.id}
-                dragTarget={draggingId !== null && dragTargetId === card.id}
+                dragPlacement={dragPlacement}
+                dragTarget={draggingId !== null && draggingId !== card.id && dragTargetId === card.id}
                 index={index}
                 key={card.id}
                 level={view.level}

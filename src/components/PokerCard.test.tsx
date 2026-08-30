@@ -21,4 +21,21 @@ describe('PokerCard dynamic level marker', () => {
     expect(fiveMarkup).toContain('poker-card-wild');
     expect(fiveMarkup).not.toContain('百搭');
   });
+
+  it('exposes a clear before or after insertion target while sorting', () => {
+    const markup = renderToStaticMarkup(
+      <PokerCard
+        card={heartFive}
+        dragPlacement="after"
+        dragTarget
+        index={0}
+        level="5"
+        onToggle={() => undefined}
+        selected={false}
+      />,
+    );
+
+    expect(markup).toContain('poker-card-drag-target-after');
+    expect(markup).toContain('data-drop-placement="after"');
+  });
 });

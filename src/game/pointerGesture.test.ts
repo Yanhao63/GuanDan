@@ -13,13 +13,14 @@ describe('card pointer gesture', () => {
   it('starts sorting only after crossing the drag threshold', () => {
     const initial = createPointerDrag('card-a', 100, 200);
     const smallMove = updatePointerDrag(initial, 104, 203, 'card-b');
-    const realDrag = updatePointerDrag(smallMove.state, 106, 200, 'card-b');
+    const realDrag = updatePointerDrag(smallMove.state, 106, 200, 'card-b', 'after');
 
     expect(smallMove.state.active).toBe(false);
     expect(realDrag.started).toBe(true);
     expect(realDrag.state).toMatchObject({
       active: true,
       cardId: 'card-a',
+      placement: 'after',
       targetId: 'card-b',
     });
   });
