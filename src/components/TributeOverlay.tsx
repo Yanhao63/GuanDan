@@ -34,16 +34,20 @@ export function TributeOverlay({ level, onAction, tribute }: TributeOverlayProps
   return (
     <div className="modal-backdrop tribute-backdrop">
       <section aria-labelledby="tribute-title" className="game-modal tribute-modal">
-        <div className="modal-crest" aria-hidden="true">贡</div>
-        <p className="eyebrow">{tribute.mode === 'double' ? '双贡流程' : '单贡流程'}</p>
-        <h2 id="tribute-title">贡还牌</h2>
+        <header className="tribute-header">
+          <span className="tribute-seal" aria-hidden="true">贡</span>
+          <div>
+            <p className="eyebrow">{tribute.mode === 'double' ? '双贡流程' : '单贡流程'}</p>
+            <h2 id="tribute-title">贡还牌</h2>
+          </div>
+        </header>
         <p className="modal-description">{tribute.message}</p>
 
         {isWaiting ? (
           <div className="tribute-waiting"><span aria-hidden="true">◇</span> 正在等待其他玩家</div>
         ) : tribute.choices.length > 0 ? (
           <>
-            <div className="tribute-cards" aria-label="可选择的贡还牌">
+            <div className="tribute-cards" aria-label={`可选择的贡还牌，共 ${tribute.choices.length} 张`}>
               {tribute.choices.map((card, index) => (
                 <PokerCard
                   card={card}

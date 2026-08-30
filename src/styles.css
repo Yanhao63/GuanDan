@@ -359,14 +359,20 @@ button:focus-visible, input:focus-visible {
 .wildcard-options small { color: var(--muted); }
 .modal-cancel { margin-top: 18px; min-height: 38px; }
 .tribute-backdrop, .result-backdrop { background: #010806b8; }
-.tribute-modal { width: min(620px, 46vw); }
-.tribute-cards { display: flex; align-items: flex-end; justify-content: center; min-height: 150px; margin: 8px 0 22px; }
-.tribute-cards .poker-card { flex-basis: 86px; width: 86px; height: 124px; margin-left: 12px; }
+.tribute-modal { width: min(680px, 54vw); padding: 22px 28px 20px; text-align: left; }
+.tribute-header { display: flex; align-items: center; gap: 12px; }
+.tribute-seal { display: grid; flex: 0 0 42px; place-items: center; width: 42px; height: 42px; border: 1px solid var(--brass); border-radius: 50%; color: var(--poker-red); background: var(--jade); box-shadow: 0 0 0 4px var(--walnut-deep); font: 700 22px STSong, serif; }
+.tribute-header .eyebrow { margin: 0 0 2px; }
+.tribute-header h2 { margin: 0; font-size: 24px; }
+.tribute-modal .modal-description { margin: 10px 0 12px; font-size: 13px; line-height: 1.5; }
+.tribute-cards { display: flex; align-items: flex-end; justify-content: flex-start; min-height: 126px; margin: 0 0 12px; overflow-x: auto; overflow-y: hidden; border: 1px solid #c3a15b44; border-radius: 12px; padding: 22px 10px 9px; background: #031e18aa; scrollbar-color: var(--brass) #05271f; scrollbar-width: thin; }
+.tribute-cards .poker-card { flex-basis: 68px; width: 68px; height: 98px; margin-left: 8px; }
 .tribute-cards .poker-card:first-child { margin-left: 0; }
-.tribute-confirm { min-width: 180px; }
-.tribute-waiting { margin: 24px 0 8px; border: 1px solid #c3a15b55; border-radius: 10px; padding: 16px; color: var(--muted); background: #05271f; }
+.tribute-cards .poker-card-selected, .tribute-cards .poker-card-selected:hover { transform: translateY(-10px); }
+.tribute-confirm { display: block; min-width: 160px; min-height: 40px; margin-left: auto; }
+.tribute-waiting { margin: 12px 0 0; border: 1px solid #c3a15b55; border-radius: 10px; padding: 11px 14px; color: var(--muted); background: #05271f; }
 .tribute-waiting span { color: var(--brass-bright); }
-.tribute-warning { color: #f0c075; line-height: 1.7; }
+.tribute-warning { margin: 12px 0 0; color: #f0c075; line-height: 1.5; }
 .result-modal { width: min(580px, 44vw); }
 .finish-order { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 22px 0; text-align: left; }
 .finish-order > div { display: flex; align-items: center; justify-content: space-between; border: 1px solid #c3a15b55; border-radius: 9px; padding: 11px 14px; background: #05271f; }
