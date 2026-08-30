@@ -45,7 +45,10 @@ export interface RoomMemberState {
 }
 
 export interface RoomSnapshot {
+  botActionDeadline?: number | null;
   dealNumber?: number;
+  history?: RoomDealHistory[];
+  historySequence?: number;
   level: PlainRank;
   members: Array<RoomMemberState | null>;
   phase: RoomPhase;
@@ -81,11 +84,22 @@ export interface RoomPlayEvent {
   player: Seat;
 }
 
+export interface RoomHistoryEntry extends RoomPlayEvent {
+  id: number;
+  kind: 'pass' | 'play';
+}
+
+export interface RoomDealHistory {
+  dealNumber: number;
+  entries: RoomHistoryEntry[];
+}
+
 export interface RoomView {
   currentSeat: Seat | null;
   dealNumber: number;
   finishOrder: Seat[];
   hand: CardData[];
+  history: RoomDealHistory[];
   lastPlay: null | {
     cards: CardData[];
     description: string;
@@ -122,6 +136,8 @@ export type DisconnectEvent =
   | { seat: Seat; type: 'bot-takeover' }
   | { from: Seat; to: Seat; type: 'host-transfer' };
 
+export const BOT_ACTION_DELAY_MS = 1_500;
+
 const INITIAL_PROGRESS: MatchProgress = {
   'team-a': { level: '2', aFailures: 0 },
   'team-b': { level: '2', aFailures: 0 },
@@ -143,7 +159,10 @@ function playMatchesDescription(play: PlayInterpretation, description: string | 
 }
 
 export class RoomEngine {
+  private botActionDeadline: number | null = null;
   private dealNumber = 0;
+  private history: RoomDealHistory[] = [];
+  private historySequence = 0;
   private level: PlainRank = '2';
   private members: Array<RoomMemberState | null> = [null, null, null, null];
   private phase: RoomPhase = 'lobby';
@@ -166,7 +185,14 @@ export class RoomEngine {
     createToken: TokenSource,
   ): RoomEngine {
     const room = new RoomEngine(snapshot.roomCode, random, createToken);
+    room.botActionDeadline = snapshot.botActionDeadline ?? null;
     room.dealNumber = snapshot.dealNumber ?? 0;
+    room.history = structuredClone(snapshot.history ?? []);
+    room.historySequence = snapshot.historySequence
+      ?? room.history.reduce((largest, deal) => deal.entries.reduce(
+        (entryLargest, entry) => Math.max(entryLargest, entry.id),
+        largest,
+      ), 0);
     room.level = snapshot.level;
     room.members = structuredClone(snapshot.members).map((member) => member === null ? null : ({
       ...member,
@@ -183,6 +209,9 @@ export class RoomEngine {
     room.tribute = structuredClone(snapshot.tribute ?? null);
     if (snapshot.turnDeadline === undefined) {
       room.refreshTurnDeadline();
+    }
+    if (snapshot.botActionDeadline === undefined) {
+      room.refreshBotActionDeadline();
     }
     return room;
   }
@@ -272,7 +301,7 @@ export class RoomEngine {
     member.connectionId = connectionId;
     member.controlledByBot = false;
     member.disconnectedAt = null;
-    this.refreshTurnDeadline(now);
+    this.refreshAutomationDeadlines(now);
   }
 
   disconnect(sessionId: string, disconnectedAt = Date.now(), connectionId?: string): void {
@@ -286,6 +315,7 @@ export class RoomEngine {
       member.disconnectedAt = disconnectedAt;
       if (member.isHost || this.trick?.currentSeat === member.seat) {
         this.turnDeadline = null;
+        this.botActionDeadline = null;
       }
     }
   }
@@ -373,7 +403,8 @@ export class RoomEngine {
     this.settlement = null;
     this.tribute = null;
     this.phase = 'playing';
-    this.refreshTurnDeadline(now);
+    this.beginDealHistory();
+    this.refreshAutomationDeadlines(now);
   }
 
   startNextDeal(hostSessionId: string, now = Date.now()): void {
@@ -396,7 +427,9 @@ export class RoomEngine {
     this.settlement = null;
     this.tribute = beginTributeRound(finishOrder, hands, this.level);
     this.phase = 'tribute';
+    this.beginDealHistory();
     this.finishTributeIfReady(now);
+    this.refreshAutomationDeadlines(now);
   }
 
   payTribute(sessionId: string, cardId: string, now = Date.now()): void {
@@ -478,15 +511,17 @@ export class RoomEngine {
       this.tribute = null;
       this.phase = 'complete';
     }
-    this.refreshTurnDeadline(now);
-    return {
+    const event: RoomPlayEvent = {
       cards: [...cards],
       description: play.description,
       player: member.seat,
     };
+    this.recordHistory('play', event);
+    this.refreshAutomationDeadlines(now);
+    return event;
   }
 
-  pass(sessionId: string, now = Date.now()): void {
+  pass(sessionId: string, now = Date.now()): RoomPlayEvent {
     if (this.phase !== 'playing' || this.trick === null) {
       throw new Error('牌局当前不能选择不要');
     }
@@ -496,16 +531,29 @@ export class RoomEngine {
     const member = this.getMember(sessionId);
     this.requireUnexpiredTurn(member, now);
     this.trick = submitPass(this.trick, member.seat).state;
-    this.refreshTurnDeadline(now);
+    const event: RoomPlayEvent = {
+      cards: [],
+      description: '不要',
+      player: member.seat,
+    };
+    this.recordHistory('pass', event);
+    this.refreshAutomationDeadlines(now);
+    return event;
   }
 
-  runCurrentBotTurn(onPlay?: (event: RoomPlayEvent) => void): boolean {
-    if (this.getPause() !== null) {
+  runCurrentBotTurn(now = Date.now(), onAction?: (event: RoomPlayEvent) => void): boolean {
+    if (
+      this.getPause() !== null
+      || this.botActionDeadline === null
+      || now < this.botActionDeadline
+    ) {
       return false;
     }
 
+    this.botActionDeadline = null;
+
     if (this.phase === 'tribute' && this.tribute !== null) {
-      return this.runBotTributeAction();
+      return this.runBotTributeAction(now);
     }
 
     if (this.phase !== 'playing' || this.trick?.currentSeat === null || this.trick === null) {
@@ -524,14 +572,16 @@ export class RoomEngine {
       level: this.level,
     });
     if (action.type === 'pass') {
-      this.pass(member.id);
+      const event = this.pass(member.id, now);
+      onAction?.(event);
     } else {
       const event = this.play(
         member.id,
         action.play.cards.map((card) => card.id),
         action.play.description,
+        now,
       );
-      onPlay?.(event);
+      onAction?.(event);
     }
     return true;
   }
@@ -543,6 +593,7 @@ export class RoomEngine {
       dealNumber: this.dealNumber,
       finishOrder: [...(this.trick?.finishOrder ?? [])],
       hand: [...self.hand],
+      history: structuredClone(this.history),
       lastPlay: this.trick?.lastPlay === null || this.trick?.lastPlayer === null || this.trick === null
         ? null
         : {
@@ -578,7 +629,10 @@ export class RoomEngine {
 
   toSnapshot(): RoomSnapshot {
     return {
+      botActionDeadline: this.botActionDeadline,
       dealNumber: this.dealNumber,
+      history: structuredClone(this.history),
+      historySequence: this.historySequence,
       level: this.level,
       members: structuredClone(this.members),
       phase: this.phase,
@@ -639,6 +693,7 @@ export class RoomEngine {
       }
     }
 
+    this.refreshBotActionDeadline(now);
     return events;
   }
 
@@ -670,6 +725,10 @@ export class RoomEngine {
     return this.getPause() === null ? this.turnDeadline : null;
   }
 
+  getNextBotActionDeadline(): number | null {
+    return this.getPause() === null ? this.botActionDeadline : null;
+  }
+
   applyTurnTimeout(now = Date.now(), onPlay?: (event: RoomPlayEvent) => void): boolean {
     if (
       this.phase !== 'playing'
@@ -690,7 +749,8 @@ export class RoomEngine {
 
     this.turnDeadline = null;
     if (this.trick.lastPlay !== null) {
-      this.pass(member.id, now);
+      const event = this.pass(member.id, now);
+      onPlay?.(event);
       return true;
     }
 
@@ -782,10 +842,36 @@ export class RoomEngine {
     }
   }
 
+  private beginDealHistory(): void {
+    this.history = [
+      ...this.history.filter((deal) => deal.dealNumber !== this.dealNumber),
+      { dealNumber: this.dealNumber, entries: [] },
+    ].slice(-2);
+  }
+
+  private recordHistory(kind: RoomHistoryEntry['kind'], event: RoomPlayEvent): void {
+    let currentDeal = this.history.find((deal) => deal.dealNumber === this.dealNumber);
+    if (currentDeal === undefined) {
+      this.beginDealHistory();
+      currentDeal = this.history.find((deal) => deal.dealNumber === this.dealNumber);
+    }
+    if (currentDeal === undefined) {
+      throw new Error('无法建立本副牌的出牌记录');
+    }
+    this.historySequence += 1;
+    currentDeal.entries.push({
+      ...event,
+      cards: [...event.cards],
+      id: this.historySequence,
+      kind,
+    });
+  }
+
   private applyTributeTransition(transition: TributeTransition, now: number): void {
     this.applyHands(transition.hands);
     this.tribute = transition.state;
     this.finishTributeIfReady(now);
+    this.refreshAutomationDeadlines(now);
   }
 
   private finishTributeIfReady(now: number): void {
@@ -797,7 +883,37 @@ export class RoomEngine {
     }
     this.trick = createTrickState(this.tribute.leader);
     this.phase = 'playing';
+    this.refreshAutomationDeadlines(now);
+  }
+
+  private refreshAutomationDeadlines(now = Date.now()): void {
     this.refreshTurnDeadline(now);
+    this.refreshBotActionDeadline(now);
+  }
+
+  private refreshBotActionDeadline(now = Date.now()): void {
+    if (!this.hasPendingBotAction()) {
+      this.botActionDeadline = null;
+      return;
+    }
+    this.botActionDeadline ??= now + BOT_ACTION_DELAY_MS;
+  }
+
+  private hasPendingBotAction(): boolean {
+    if (this.getPause() !== null) {
+      return false;
+    }
+    if (this.phase === 'tribute' && this.tribute !== null) {
+      return this.getPendingTributeSeats().some((seat) => {
+        const member = this.members[seat];
+        return member !== null && (member.kind === 'bot' || member.controlledByBot);
+      });
+    }
+    if (this.phase !== 'playing' || this.trick === null || this.trick.currentSeat === null) {
+      return false;
+    }
+    const member = this.members[this.trick.currentSeat];
+    return member !== null && (member.kind === 'bot' || member.controlledByBot);
   }
 
   private refreshTurnDeadline(now = Date.now()): void {
@@ -907,7 +1023,7 @@ export class RoomEngine {
     };
   }
 
-  private runBotTributeAction(): boolean {
+  private runBotTributeAction(now: number): boolean {
     if (this.tribute === null || this.phase !== 'tribute') {
       return false;
     }
@@ -929,7 +1045,7 @@ export class RoomEngine {
       if (choice === undefined) {
         throw new Error('机器人没有可进贡的牌');
       }
-      this.payTribute(bot.id, choice.id);
+      this.payTribute(bot.id, choice.id, now);
       return true;
     }
 
@@ -939,7 +1055,7 @@ export class RoomEngine {
           ? offer
           : best
       ));
-      this.chooseDoubleTribute(bot.id, choice.card.id);
+      this.chooseDoubleTribute(bot.id, choice.card.id, now);
       return true;
     }
 
@@ -947,7 +1063,7 @@ export class RoomEngine {
     if (choice === undefined) {
       throw new Error('机器人没有符合规则的还贡牌');
     }
-    this.returnTribute(bot.id, choice.id);
+    this.returnTribute(bot.id, choice.id, now);
     return true;
   }
 

@@ -83,6 +83,7 @@ export class GameRoom extends DurableObject<Env> {
 
   private async syncAlarm(): Promise<void> {
     const deadlines = [
+      this.room?.getNextBotActionDeadline() ?? null,
       this.room?.getNextDisconnectDeadline() ?? null,
       this.room?.getNextTurnDeadline() ?? null,
     ].filter((deadline): deadline is number => deadline !== null);
@@ -124,19 +125,6 @@ export class GameRoom extends DurableObject<Env> {
         // The connection may have closed between enumeration and send.
       }
     });
-  }
-
-  private runBotsUntilHuman(): void {
-    if (this.room === null) {
-      return;
-    }
-    let turns = 0;
-    while (this.room.runCurrentBotTurn((event) => this.broadcastPlayEvent(event))) {
-      turns += 1;
-      if (turns >= 200) {
-        throw new Error('机器人连续回合超过安全上限');
-      }
-    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -186,7 +174,6 @@ export class GameRoom extends DurableObject<Env> {
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment({ connectionId, sessionId: receipt.sessionId } satisfies ConnectionAttachment);
-    this.runBotsUntilHuman();
     await this.persist();
     await this.syncAlarm();
     server.send(JSON.stringify({ type: 'joined', receipt, view: this.room.getView(receipt.sessionId) }));
@@ -229,7 +216,7 @@ export class GameRoom extends DurableObject<Env> {
           playEvent = this.room.play(attachment.sessionId, message.cardIds, message.description);
           break;
         case 'pass':
-          this.room.pass(attachment.sessionId);
+          playEvent = this.room.pass(attachment.sessionId);
           break;
         case 'pay-tribute':
           this.room.payTribute(attachment.sessionId, message.cardId);
@@ -264,7 +251,6 @@ export class GameRoom extends DurableObject<Env> {
       if (playEvent !== null) {
         this.broadcastPlayEvent(playEvent);
       }
-      this.runBotsUntilHuman();
       await this.persist();
       await this.syncAlarm();
       this.broadcastViews();
@@ -299,7 +285,7 @@ export class GameRoom extends DurableObject<Env> {
     const now = Date.now();
     this.room.applyDisconnectTimeouts(now);
     this.room.applyTurnTimeout(now, (event) => this.broadcastPlayEvent(event));
-    this.runBotsUntilHuman();
+    this.room.runCurrentBotTurn(now, (event) => this.broadcastPlayEvent(event));
     await this.persist();
     await this.syncAlarm();
     this.broadcastViews();

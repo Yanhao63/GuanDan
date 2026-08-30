@@ -80,6 +80,19 @@ export function DirectionalPlay({
     );
   }
 
+  if (displayedPlay.cards.length === 0) {
+    return (
+      <div
+        aria-label={`${displayedPlay.player + 1} 号座位选择不要`}
+        className={activeEvent === null
+          ? 'pass-flight played-card-static'
+          : `pass-flight played-card-from-${direction}`}
+      >
+        <span>不要</span>
+      </div>
+    );
+  }
+
   return displayedPlay.cards.map((card, index) => (
     <div
       className={activeEvent === null

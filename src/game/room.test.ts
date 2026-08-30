@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RoomEngine } from './room';
+import { BOT_ACTION_DELAY_MS, RoomEngine } from './room';
 import { getRankStrength } from './rules/ranks';
 import { DISCONNECT_GRACE_MS } from './rules/timing';
 
@@ -194,26 +194,74 @@ describe('authoritative room engine', () => {
     expect(after).toEqual(before);
   });
 
-  it('automatically advances consecutive bot turns until a human must act', () => {
+  it('paces consecutive bot turns 1.5 seconds apart until a human must act', () => {
     const room = new RoomEngine('123456', seededRandom(12), tokenSource());
     const host = room.joinHuman('房主');
     room.addBot(host.sessionId, 1);
     room.addBot(host.sessionId, 2);
     room.addBot(host.sessionId, 3);
-    room.start(host.sessionId);
+    room.start(host.sessionId, 10_000);
 
     const botPlayEvents: Array<{ player: number }> = [];
     let botTurns = 0;
-    while (room.runCurrentBotTurn((event) => botPlayEvents.push(event))) {
+    let deadline = room.getNextBotActionDeadline();
+    while (deadline !== null) {
+      expect(room.runCurrentBotTurn(deadline - 1)).toBe(false);
+      expect(room.runCurrentBotTurn(deadline, (event) => { botPlayEvents.push(event); })).toBe(true);
       botTurns += 1;
       if (botTurns > 100) {
         throw new Error('机器人回合未能停止');
       }
+      const nextDeadline = room.getNextBotActionDeadline();
+      if (nextDeadline !== null) {
+        expect(nextDeadline).toBe(deadline + BOT_ACTION_DELAY_MS);
+      }
+      deadline = nextDeadline;
     }
 
     const view = room.getView(host.sessionId);
     expect(view.phase === 'complete' || view.currentSeat === host.seat).toBe(true);
     expect(botPlayEvents.every((event) => event.player !== host.seat)).toBe(true);
+  });
+
+  it('records plays and passes while retaining only the latest two deals', () => {
+    const { receipts, room } = fullHumanRoom();
+    room.start(receipts[0].sessionId, 1_000);
+    const opening = room.getView(receipts[0].sessionId);
+    const leaderSeat = opening.currentSeat;
+    if (leaderSeat === null) {
+      throw new Error('没有首出玩家');
+    }
+    const leader = receipts[leaderSeat];
+    const openingCard = room.getView(leader.sessionId).hand[0];
+    room.play(leader.sessionId, [openingCard.id], undefined, 1_000);
+
+    const passerSeat = ((leaderSeat + 1) % 4) as 0 | 1 | 2 | 3;
+    room.pass(receipts[passerSeat].sessionId, 1_100);
+
+    expect(room.getView(receipts[0].sessionId).history).toEqual([{
+      dealNumber: 1,
+      entries: [
+        expect.objectContaining({ cards: [openingCard], id: 1, kind: 'play', player: leaderSeat }),
+        expect.objectContaining({ cards: [], description: '不要', id: 2, kind: 'pass', player: passerSeat }),
+      ],
+    }]);
+
+    const snapshot = room.toSnapshot();
+    snapshot.botActionDeadline = null;
+    snapshot.dealNumber = 2;
+    snapshot.history = [
+      ...(snapshot.history ?? []),
+      { dealNumber: 2, entries: [] },
+    ];
+    snapshot.phase = 'lobby';
+    snapshot.trick = null;
+    snapshot.turnDeadline = null;
+    const restored = RoomEngine.restore(snapshot, seededRandom(13), tokenSource());
+    restored.start(receipts[0].sessionId, 2_000);
+
+    expect(restored.getView(receipts[0].sessionId).history.map((deal) => deal.dealNumber))
+      .toEqual([2, 3]);
   });
 
   it('transfers a disconnected lobby host after 120 seconds', () => {
@@ -238,12 +286,14 @@ describe('authoritative room engine', () => {
     expect(room.getView(receipts[0].sessionId).pause).toEqual({ kind: 'player', seat: 1 });
     expect(room.runCurrentBotTurn()).toBe(false);
 
-    expect(room.applyDisconnectTimeouts(5_000 + DISCONNECT_GRACE_MS)).toEqual([
+    const takeoverAt = 5_000 + DISCONNECT_GRACE_MS;
+    expect(room.applyDisconnectTimeouts(takeoverAt)).toEqual([
       { seat: 1, type: 'bot-takeover' },
     ]);
     expect(room.getView(receipts[0].sessionId).pause).toBeNull();
     expect(room.getView(receipts[0].sessionId).players.find((player) => player.seat === 1)?.controlledByBot).toBe(true);
-    expect(room.runCurrentBotTurn()).toBe(true);
+    expect(room.getNextBotActionDeadline()).toBe(takeoverAt + BOT_ACTION_DELAY_MS);
+    expect(room.runCurrentBotTurn(takeoverAt + BOT_ACTION_DELAY_MS)).toBe(true);
 
     room.reconnect(receipts[1].reconnectCode);
     expect(room.getView(receipts[1].sessionId).players.find((player) => player.seat === 1)).toMatchObject({

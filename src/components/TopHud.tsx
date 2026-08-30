@@ -6,6 +6,7 @@ import { Icon } from '../ui/Icon';
 interface TopHudProps {
   audio: AudioSettings;
   level: string;
+  historyOpen: boolean;
   progress: MatchProgress;
   reconnectCode: string;
   roomCode: string;
@@ -13,10 +14,12 @@ interface TopHudProps {
   timerLabel: string;
   turnDeadline: number | null;
   onAudioChange: (key: keyof AudioSettings, value: number) => void;
+  onHistoryToggle: () => void;
 }
 
 export function TopHud({
   audio,
+  historyOpen,
   level,
   progress,
   reconnectCode,
@@ -25,6 +28,7 @@ export function TopHud({
   timerLabel,
   turnDeadline,
   onAudioChange,
+  onHistoryToggle,
 }: TopHudProps) {
   const [showAudio, setShowAudio] = useState(false);
   const [showRoomSettings, setShowRoomSettings] = useState(false);
@@ -65,6 +69,9 @@ export function TopHud({
       <div aria-live="polite" className="timer-chip">
         {remainingSeconds === null ? timerLabel : `剩余 ${remainingSeconds} 秒`}
       </div>
+      <button aria-expanded={historyOpen} aria-label="查看出牌历史" className="hud-icon-button" onClick={onHistoryToggle} type="button">
+        <Icon name="history" />
+      </button>
       <button aria-expanded={showAudio} aria-label="声音设置" className="hud-icon-button" onClick={() => setShowAudio((open) => !open)} type="button">
         <Icon name="audio" />
       </button>

@@ -15,6 +15,7 @@ import type { PlayInterpretation } from '../game/rules/types';
 import { Icon } from '../ui/Icon';
 import { DealResultOverlay } from './DealResultOverlay';
 import { PlayerSeat } from './PlayerSeat';
+import { PlayHistoryDrawer } from './PlayHistoryDrawer';
 import { PokerCard } from './PokerCard';
 import { QuickChatDrawer } from './QuickChatDrawer';
 import { DirectionalPlay, getTableDirection, TurnIndicator } from './TableActivity';
@@ -94,6 +95,7 @@ export function GameTable({
   const suppressToggleRef = useRef(false);
   const [audio, setAudio] = useState<AudioSettings>(loadAudioSettings);
   const [showChat, setShowChat] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [showWildcard, setShowWildcard] = useState(false);
   const [wildcardOptions, setWildcardOptions] = useState<PlayInterpretation[]>([]);
   const [localMessage, setLocalMessage] = useState('');
@@ -243,6 +245,7 @@ export function GameTable({
     <main className="game-screen" onPointerDown={() => { void gameAudio.unlock(); }}>
       <TopHud
         audio={audio}
+        historyOpen={showHistory}
         level={view.level}
         progress={view.progress}
         reconnectCode={reconnectCode}
@@ -251,6 +254,10 @@ export function GameTable({
         timerLabel={view.timer}
         turnDeadline={view.turnDeadline}
         onAudioChange={changeAudio}
+        onHistoryToggle={() => {
+          setShowChat(false);
+          setShowHistory((open) => !open);
+        }}
       />
 
       <div className="table-canvas">
@@ -299,7 +306,7 @@ export function GameTable({
               出牌{selectedIds.length > 0 ? ` · ${selectedIds.length} 张` : ''}
             </button>
             <button aria-label="整理手牌" className="round-action" onClick={sortHand} type="button"><Icon name="sort" /></button>
-            <button aria-label="快捷语和表情" className="round-action" onClick={() => setShowChat(true)} type="button"><Icon name="chat" /></button>
+            <button aria-label="快捷语和表情" className="round-action" onClick={() => { setShowHistory(false); setShowChat(true); }} type="button"><Icon name="chat" /></button>
           </div>
 
           <div
@@ -356,6 +363,14 @@ export function GameTable({
       </div>
 
       {showChat ? <QuickChatDrawer onClose={() => setShowChat(false)} onSend={sendMessage} /> : null}
+      {showHistory ? (
+        <PlayHistoryDrawer
+          history={view.history}
+          onClose={() => setShowHistory(false)}
+          players={view.players}
+          selfSeat={view.selfSeat}
+        />
+      ) : null}
       {showWildcard ? (
         <WildcardModal
           onCancel={() => setShowWildcard(false)}
