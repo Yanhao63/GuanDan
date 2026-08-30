@@ -302,7 +302,6 @@ export function GameTable({
 
           <div className="action-bar">
             <button className="button button-secondary action-small" disabled={!isSelfTurn || view.lastPlay === null} onClick={() => { setSelectedIds([]); onPass(); }} type="button">不要</button>
-            <button className="button button-secondary action-small" onClick={() => setLocalMessage('提示：优先选择能合法压过牌面的较小组合')} type="button">提示</button>
             <button className="button button-primary play-button" disabled={!isSelfTurn || selectedIds.length === 0} onClick={handlePlay} type="button">
               出牌{selectedIds.length > 0 ? ` · ${selectedIds.length} 张` : ''}
             </button>

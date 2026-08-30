@@ -257,7 +257,7 @@ button:focus-visible, input:focus-visible {
 .self-status .hand-count { border: 1px solid #c3a15b88; border-radius: 999px; padding: 4px 8px; }
 .self-status .self-turn-tag { border: 1px solid var(--jade); border-radius: 999px; padding: 4px 9px; color: var(--walnut-deep); background: var(--jade); box-shadow: 0 0 16px #d7e5cf55; font-weight: 700; white-space: nowrap; }
 .self-area-active .self-avatar { box-shadow: 0 0 0 5px #24170f, 0 0 24px #e1c778aa; }
-.action-bar { position: absolute; z-index: 10; bottom: 33%; left: 50%; display: flex; align-items: center; gap: clamp(7px, .6vw, 12px); transform: translateX(-50%); }
+.action-bar { position: absolute; z-index: 10; bottom: 46%; left: 50%; display: flex; align-items: center; gap: clamp(7px, .6vw, 12px); transform: translateX(-50%); }
 .action-small { min-width: clamp(72px, 5.4vw, 104px); min-height: clamp(34px, 2.5vw, 48px); padding: 0 15px; }
 .play-button { min-width: clamp(126px, 9vw, 172px); min-height: clamp(42px, 3vw, 58px); font-size: clamp(15px, 1.05vw, 21px); }
 .round-action { width: clamp(36px, 2.7vw, 52px); aspect-ratio: 1; }
