@@ -229,9 +229,9 @@ button:focus-visible, input:focus-visible {
 .player-seat-active .player-name-row strong { color: var(--brass-bright); text-shadow: 0 0 12px #e1c77888; }
 
 .table-center { position: absolute; z-index: 2; top: 29%; left: 50%; width: 42%; height: 25%; transform: translateX(-50%); }
-.turn-indicator { position: absolute; z-index: 7; top: -72px; left: 50%; display: flex; align-items: center; gap: 10px; min-height: 48px; border: 2px solid #e1c778cc; border-radius: 999px; padding: 6px 18px 6px 8px; color: var(--muted); background: linear-gradient(180deg, #0d4c3cf8, #05271ff8); box-shadow: 0 12px 30px #0009, 0 0 20px #e1c77833, inset 0 0 0 1px #24170f; font-size: 14px; transform: translateX(-50%); white-space: nowrap; }
-.turn-indicator-arrow { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--walnut-deep); background: linear-gradient(180deg, #f1dc9b, var(--brass-bright)); box-shadow: 0 0 14px #e1c77877; font-size: 21px; font-weight: 900; }
-.turn-indicator strong { color: var(--ink); font-size: 17px; }
+.turn-indicator { position: absolute; z-index: 7; top: -100px; left: 50%; display: flex; align-items: center; gap: 14px; min-height: 66px; border: 3px solid #e1c778dd; border-radius: 999px; padding: 8px 26px 8px 10px; color: var(--muted); background: linear-gradient(180deg, #0d4c3cfa, #05271ffa); box-shadow: 0 15px 36px #000a, 0 0 28px #e1c77844, inset 0 0 0 2px #24170f; font-size: 18px; font-weight: 700; transform: translateX(-50%); white-space: nowrap; }
+.turn-indicator-arrow { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; color: var(--walnut-deep); background: linear-gradient(180deg, #f1dc9b, var(--brass-bright)); box-shadow: 0 0 18px #e1c77899; font-size: 30px; font-weight: 900; }
+.turn-indicator strong { color: var(--ink); font-size: 24px; }
 .turn-indicator-self { border-color: #d7e5cf; box-shadow: 0 12px 30px #0009, 0 0 24px #d7e5cf66; }
 .round-state { text-align: center; }
 .round-state span { display: block; color: var(--brass); font-size: clamp(10px, .7vw, 13px); letter-spacing: .18em; }
