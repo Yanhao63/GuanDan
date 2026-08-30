@@ -62,7 +62,7 @@ export function LobbyScreen({
   };
 
   const copyInvitation = async () => {
-    await navigator.clipboard?.writeText(`来玩掼蛋蛋，房间号：${roomCode}`);
+    await navigator.clipboard?.writeText(`来玩阿钊掼蛋，房间号：${roomCode}`);
   };
 
   const copyReconnectCode = async () => {

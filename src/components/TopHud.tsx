@@ -55,7 +55,7 @@ export function TopHud({
 
   return (
     <header className="top-hud">
-      <div className="hud-brand">掼蛋蛋</div>
+      <div className="hud-brand">阿钊掼蛋</div>
       <div className="hud-divider" />
       <div className="hud-stat"><span>房间</span><strong>{roomCode}</strong></div>
       <div className="hud-stat hud-level"><span>当前级牌</span><strong>{level}</strong></div>

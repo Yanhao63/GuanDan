@@ -58,7 +58,7 @@ export function EntryScreen({ busy = false, errorMessage = '', onCreateRoom, onJ
         <BrandMark />
         <div className="entry-copy">
           <p className="eyebrow">朋友局 · 无需注册</p>
-          <h1 id="entry-title">今晚，坐一桌</h1>
+          <h1 id="entry-title">输的，是SB</h1>
           <p>输入昵称即可创建牌桌，或凭朋友发来的房间号入座。</p>
         </div>
 
