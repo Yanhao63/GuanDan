@@ -54,6 +54,7 @@ export type TributeMode = 'single' | 'double';
 export type TributePhase =
   | 'collecting-tributes'
   | 'revealing-tributes'
+  | 'revealing-resistance'
   | 'choosing-double-tribute'
   | 'collecting-returns'
   | 'complete';
@@ -171,7 +172,7 @@ export function beginTributeRound(
     level,
     mode,
     offers: [],
-    phase: resisted ? 'complete' : 'collecting-tributes',
+    phase: resisted ? 'revealing-resistance' : 'collecting-tributes',
     recipientSeats,
     resisted,
     returns: [],
@@ -235,8 +236,14 @@ export function submitTribute(
 }
 
 export function finishTributeReveal(state: TributeRoundState): TributeRoundState {
-  if (state.phase !== 'revealing-tributes') {
+  if (state.phase !== 'revealing-tributes' && state.phase !== 'revealing-resistance') {
     throw new Error('当前不在贡牌公开阶段');
+  }
+  if (state.phase === 'revealing-resistance') {
+    return {
+      ...state,
+      phase: 'complete',
+    };
   }
   return {
     ...state,

@@ -356,7 +356,7 @@ describe('authoritative room engine', () => {
     )).toThrow(/等待掉线玩家/);
   });
 
-  it('settles a deal, lets only the host start the next deal, and completes double tribute', () => {
+  it('starts the third deal with a complete double-tribute flow instead of skipping it', () => {
     const { receipts, room } = fullHumanRoom();
     room.start(receipts[0].sessionId);
     const nearComplete = room.toSnapshot();
@@ -391,18 +391,24 @@ describe('authoritative room engine', () => {
     expect(() => completedRoom.startNextDeal(receipts[1].sessionId)).toThrow(/房主/);
 
     const completedSnapshot = completedRoom.toSnapshot();
+    completedSnapshot.dealNumber = 2;
     let tributeRoom: RoomEngine | null = null;
     for (let seed = 1; seed <= 50; seed += 1) {
       const candidate = RoomEngine.restore(completedSnapshot, seededRandom(seed), tokenSource());
       candidate.startNextDeal(receipts[0].sessionId, 10_000);
-      if (candidate.getView(receipts[0].sessionId).phase === 'tribute') {
+      if (candidate.getView(receipts[1].sessionId).tribute?.action === 'pay-tribute') {
         tributeRoom = candidate;
         break;
       }
     }
+
     if (tributeRoom === null) {
       throw new Error('未找到非抗贡的确定性测试牌局');
     }
+    expect(tributeRoom.getView(receipts[0].sessionId)).toMatchObject({
+      dealNumber: 3,
+      phase: 'tribute',
+    });
 
     for (const [index, contributorSeat] of ([1, 3] as const).entries()) {
       const contributor = receipts[contributorSeat];
@@ -453,5 +459,58 @@ describe('authoritative room engine', () => {
       .toEqual([27, 27, 27, 27]);
     expect(playingView.history.at(-1)?.entries.filter((entry) => entry.kind === 'return-tribute'))
       .toHaveLength(2);
+  });
+
+  it('shows anti-tribute for six seconds on later deals before play begins', () => {
+    const { receipts, room } = fullHumanRoom();
+    room.start(receipts[0].sessionId);
+    const snapshot = room.toSnapshot();
+    snapshot.dealNumber = 4;
+    snapshot.phase = 'complete';
+    snapshot.trick = {
+      currentSeat: null,
+      finishOrder: [0, 2],
+      lastPlay: null,
+      lastPlayer: null,
+      passedSinceLastPlay: [],
+      status: 'complete',
+    };
+    snapshot.settlement = {
+      headTeam: 'team-a',
+      matchWinner: null,
+      nextLevel: '5',
+      teams: snapshot.progress,
+      upgradedBy: 3,
+    };
+
+    let resistanceRoom: RoomEngine | null = null;
+    for (let seed = 1; seed <= 200; seed += 1) {
+      const candidate = RoomEngine.restore(snapshot, seededRandom(seed), tokenSource());
+      candidate.startNextDeal(receipts[0].sessionId, 20_000);
+      if (candidate.getView(receipts[0].sessionId).tribute?.action === 'resisted') {
+        resistanceRoom = candidate;
+        break;
+      }
+    }
+    if (resistanceRoom === null) {
+      throw new Error('未找到抗贡的确定性测试牌局');
+    }
+
+    expect(resistanceRoom.getView(receipts[0].sessionId)).toMatchObject({
+      dealNumber: 5,
+      phase: 'tribute',
+      tribute: {
+        action: 'resisted',
+        revealDeadline: 20_000 + DOUBLE_TRIBUTE_REVEAL_MS,
+        revealDurationMs: DOUBLE_TRIBUTE_REVEAL_MS,
+      },
+    });
+    expect(resistanceRoom.applyTributeRevealTimeout(20_000 + DOUBLE_TRIBUTE_REVEAL_MS - 1)).toBe(false);
+    expect(resistanceRoom.applyTributeRevealTimeout(20_000 + DOUBLE_TRIBUTE_REVEAL_MS)).toBe(true);
+    expect(resistanceRoom.getView(receipts[0].sessionId)).toMatchObject({
+      dealNumber: 5,
+      phase: 'playing',
+      tribute: null,
+    });
   });
 });

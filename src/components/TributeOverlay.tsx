@@ -4,7 +4,7 @@ import type { PlainRank } from '../game/rules/types';
 import { PokerCard } from './PokerCard';
 import { TributeRevealProgressBar } from './TributeRevealProgressBar';
 
-type ActiveTributeAction = Exclude<TributeAction, 'reveal' | 'waiting'>;
+type ActiveTributeAction = Exclude<TributeAction, 'reveal' | 'resisted' | 'waiting'>;
 
 interface TributeOverlayProps {
   level: PlainRank;
@@ -22,6 +22,7 @@ const actionLabels: Record<ActiveTributeAction, string> = {
 export function TributeOverlay({ level, onAction, players, tribute }: TributeOverlayProps) {
   const [selectedId, setSelectedId] = useState('');
   const isReveal = tribute.action === 'reveal';
+  const isResistance = tribute.action === 'resisted';
   const isWaiting = tribute.action === 'waiting';
   const activeAction: ActiveTributeAction | null = tribute.action === 'pay-tribute'
     || tribute.action === 'choose-double-tribute'
@@ -40,15 +41,21 @@ export function TributeOverlay({ level, onAction, players, tribute }: TributeOve
     <div className="modal-backdrop tribute-backdrop">
       <section aria-labelledby="tribute-title" className="game-modal tribute-modal">
         <header className="tribute-header">
-          <span className="tribute-seal" aria-hidden="true">贡</span>
+          <span className={`tribute-seal${isResistance ? ' tribute-resistance-seal' : ''}`} aria-hidden="true">{isResistance ? '抗' : '贡'}</span>
           <div>
             <p className="eyebrow">{tribute.mode === 'double' ? '双贡流程' : '单贡流程'}</p>
-            <h2 id="tribute-title">{isReveal ? '贡牌公开' : '贡还牌'}</h2>
+            <h2 id="tribute-title">{isResistance ? '抗贡成功' : isReveal ? '贡牌公开' : '贡还牌'}</h2>
           </div>
         </header>
         <p className="modal-description">{tribute.message}</p>
 
-        {isReveal && tribute.revealDeadline !== null && tribute.revealDurationMs !== null ? (
+        {isResistance && tribute.revealDeadline !== null && tribute.revealDurationMs !== null ? (
+          <div className="tribute-resistance" role="status">
+            <div className="tribute-resistance-mark" aria-hidden="true">王 · 王</div>
+            <strong>本副免除贡还牌</strong>
+            <TributeRevealProgressBar deadline={tribute.revealDeadline} durationMs={tribute.revealDurationMs} />
+          </div>
+        ) : isReveal && tribute.revealDeadline !== null && tribute.revealDurationMs !== null ? (
           <>
             <div className="tribute-cards tribute-reveal-cards" aria-label={`公开的贡牌，共 ${tribute.revealedCards.length} 张`}>
               {tribute.revealedCards.map((offer, index) => (

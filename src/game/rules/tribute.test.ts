@@ -158,7 +158,7 @@ describe('tribute and return rules', () => {
     expect(completed.hands[1]).toContainEqual(returnFromTeammate);
   });
 
-  it('skips all card exchanges on anti-tribute and lets the previous head lead', () => {
+  it('reveals anti-tribute before skipping card exchanges and lets the previous head lead', () => {
     const firstBigJoker = card('大王', 'joker', 1);
     const secondBigJoker = card('大王', 'joker', 2);
     const initialHands = hands(
@@ -172,6 +172,11 @@ describe('tribute and return rules', () => {
 
     expect(resisted).toMatchObject({
       mode: 'double',
+      phase: 'revealing-resistance',
+      resisted: true,
+      leader: 0,
+    });
+    expect(finishTributeReveal(resisted)).toMatchObject({
       phase: 'complete',
       resisted: true,
       leader: 0,

@@ -127,7 +127,7 @@ export interface RoomView {
   tribute: TributeView | null;
 }
 
-export type TributeAction = 'pay-tribute' | 'choose-double-tribute' | 'return-tribute' | 'reveal' | 'waiting';
+export type TributeAction = 'pay-tribute' | 'choose-double-tribute' | 'return-tribute' | 'reveal' | 'resisted' | 'waiting';
 
 export interface TributeView {
   action: TributeAction;
@@ -795,7 +795,7 @@ export class RoomEngine {
   applyTributeRevealTimeout(now = Date.now()): boolean {
     if (
       this.phase !== 'tribute'
-      || this.tribute?.phase !== 'revealing-tributes'
+      || (this.tribute?.phase !== 'revealing-tributes' && this.tribute?.phase !== 'revealing-resistance')
       || this.tributeRevealDeadline === null
       || now < this.tributeRevealDeadline
       || this.getPause() !== null
@@ -804,6 +804,7 @@ export class RoomEngine {
     }
     this.tribute = finishTributeReveal(this.tribute);
     this.tributeRevealDeadline = null;
+    this.finishTributeIfReady(now);
     this.refreshAutomationDeadlines(now);
     return true;
   }
@@ -984,7 +985,7 @@ export class RoomEngine {
   private refreshTributeRevealDeadline(now = Date.now()): void {
     if (
       this.phase !== 'tribute'
-      || this.tribute?.phase !== 'revealing-tributes'
+      || (this.tribute?.phase !== 'revealing-tributes' && this.tribute?.phase !== 'revealing-resistance')
       || this.getPause() !== null
     ) {
       this.tributeRevealDeadline = null;
@@ -1076,7 +1077,7 @@ export class RoomEngine {
     if (this.tribute.phase === 'choosing-double-tribute') {
       return [this.tribute.headSeat];
     }
-    if (this.tribute.phase === 'revealing-tributes') {
+    if (this.tribute.phase === 'revealing-tributes' || this.tribute.phase === 'revealing-resistance') {
       return [];
     }
     return this.tribute.assignments
@@ -1091,16 +1092,29 @@ export class RoomEngine {
       return null;
     }
 
+    const isRevealPhase = this.tribute.phase === 'revealing-tributes'
+      || this.tribute.phase === 'revealing-resistance';
     const shared: Pick<TributeView, 'mode' | 'revealDeadline' | 'revealDurationMs' | 'revealedCards'> = {
       mode: this.tribute.mode,
-      revealDeadline: this.tribute.phase === 'revealing-tributes' ? this.tributeRevealDeadline : null,
-      revealDurationMs: this.tribute.phase === 'revealing-tributes'
+      revealDeadline: isRevealPhase ? this.tributeRevealDeadline : null,
+      revealDurationMs: isRevealPhase
         ? getTributeRevealDurationMs(this.tribute.mode)
         : null,
       revealedCards: this.tribute.phase === 'revealing-tributes'
         ? this.tribute.offers.map((offer) => ({ card: { ...offer.card }, source: offer.source }))
         : [],
     };
+
+    if (this.tribute.phase === 'revealing-resistance') {
+      return {
+        ...shared,
+        action: 'resisted',
+        choices: [],
+        message: this.tribute.mode === 'single'
+          ? '抗贡成功：末游持有两张大王，本副无需交换牌'
+          : '抗贡成功：进贡方合计持有两张大王，本副无需交换牌',
+      };
+    }
 
     if (this.tribute.phase === 'revealing-tributes') {
       return {

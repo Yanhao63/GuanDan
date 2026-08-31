@@ -65,4 +65,28 @@ describe('TributeOverlay', () => {
     expect(markup).toContain('丁 进贡');
     expect(markup).toContain('贡牌公开剩余进度');
   });
+
+  it('shows a timed anti-tribute result instead of silently entering the next deal', () => {
+    const markup = renderToStaticMarkup(
+      <TributeOverlay
+        level="2"
+        onAction={() => undefined}
+        players={players}
+        tribute={{
+          action: 'resisted',
+          choices: [],
+          message: '抗贡成功：进贡方合计持有两张大王，本副无需交换牌',
+          mode: 'double',
+          revealDeadline: Date.now() + 6_000,
+          revealDurationMs: 6_000,
+          revealedCards: [],
+        }}
+      />,
+    );
+
+    expect(markup).toContain('抗贡成功');
+    expect(markup).toContain('王 · 王');
+    expect(markup).toContain('本副免除贡还牌');
+    expect(markup).toContain('贡牌公开剩余进度');
+  });
 });

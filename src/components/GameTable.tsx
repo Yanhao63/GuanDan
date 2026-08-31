@@ -35,7 +35,7 @@ interface GameTableProps {
   onQuickMessage: (message: string) => void;
   onQuickMessageComplete: () => void;
   onNextDeal: () => void;
-  onTributeAction: (action: Exclude<TributeAction, 'reveal' | 'waiting'>, cardId: string) => void;
+  onTributeAction: (action: Exclude<TributeAction, 'reveal' | 'resisted' | 'waiting'>, cardId: string) => void;
   reconnectCode: string;
   view: RoomView;
 }
@@ -146,7 +146,7 @@ export function GameTable({
   }, [isSelfTurn]);
 
   useEffect(() => {
-    if (view.tribute?.action === 'reveal') {
+    if (view.tribute?.action === 'reveal' || view.tribute?.action === 'resisted') {
       gameAudio.playEffect('tribute');
     }
   }, [view.tribute?.action]);
