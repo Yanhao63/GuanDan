@@ -21,15 +21,41 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
 const STORAGE_KEY = 'guandan-audio-settings';
 
 export const DEFAULT_BGM_PATTERN = {
-  bass: [261.63, 349.23, 392, 261.63, 349.23, 392, 440, 392],
-  beatSeconds: 0.48,
+  beatsPerBar: 4,
+  bpm: 142,
+  chordProgression: [
+    { quality: 'major', root: 48 }, { quality: 'major', root: 43 },
+    { quality: 'minor', root: 45 }, { quality: 'minor', root: 40 },
+    { quality: 'major', root: 41 }, { quality: 'major', root: 48 },
+    { quality: 'minor', root: 38 }, { quality: 'major', root: 43 },
+    { quality: 'major', root: 48 }, { quality: 'major', root: 43 },
+    { quality: 'minor', root: 45 }, { quality: 'minor', root: 40 },
+    { quality: 'major', root: 41 }, { quality: 'major', root: 43 },
+    { quality: 'major', root: 48 }, { quality: 'major', root: 43 },
+  ],
   melody: [
-    523.25, 659.25, 783.99, 880, 783.99, 659.25, 587.33, 659.25,
-    698.46, 880, 1046.5, 880, 783.99, 698.46, 659.25, 783.99,
-    523.25, 659.25, 783.99, 1046.5, 987.77, 880, 783.99, 659.25,
-    698.46, 783.99, 880, 783.99, 659.25, 587.33, 523.25, 659.25,
+    72, 76, 79, 79, 81, 79, 76, 72,
+    74, 76, 79, 76, 74, 72, 74, null,
+    76, 76, 81, 81, 79, 76, 74, 72,
+    76, 79, 76, 74, 72, null, 67, 69,
+    72, 74, 76, 79, 81, 79, 76, 74,
+    72, 76, 79, 84, 81, 79, 76, null,
+    74, 74, 77, 81, 79, 77, 74, 72,
+    71, 74, 79, 77, 74, 71, 69, null,
+    79, 81, 84, 84, 81, 79, 76, 79,
+    81, 84, 86, 84, 81, 79, 76, null,
+    76, 81, 84, 81, 79, 76, 74, 72,
+    76, 79, 83, 79, 76, 74, 71, null,
+    77, 81, 84, 81, 79, 77, 76, 74,
+    74, 79, 83, 81, 79, 74, 71, 74,
+    72, 76, 79, 81, 79, 76, 74, 72,
+    74, 71, 67, 69, 71, 72, null, null,
   ],
 } as const;
+
+function midiToFrequency(note: number): number {
+  return 440 * (2 ** ((note - 69) / 12));
+}
 
 function clampVolume(value: number): number {
   return Number.isFinite(value) ? Math.min(100, Math.max(0, Math.round(value))) : 0;
@@ -169,37 +195,88 @@ class GameAudio {
 
   private createBackgroundBuffer(): AudioBuffer {
     const context = this.context as AudioContext;
-    const { bass, beatSeconds, melody } = DEFAULT_BGM_PATTERN;
-    const duration = melody.length * beatSeconds;
+    const { beatsPerBar, bpm, chordProgression, melody } = DEFAULT_BGM_PATTERN;
+    const beatSeconds = 60 / bpm;
+    const eighthSeconds = beatSeconds / 2;
+    const duration = chordProgression.length * beatsPerBar * beatSeconds;
     const buffer = context.createBuffer(1, context.sampleRate * duration, context.sampleRate);
     const channel = buffer.getChannelData(0);
 
-    melody.forEach((frequency, index) => {
-      const start = Math.floor((index * beatSeconds + 0.06) * context.sampleRate);
-      const length = Math.floor(beatSeconds * 0.82 * context.sampleRate);
+    const addTone = (
+      frequency: number,
+      startSeconds: number,
+      lengthSeconds: number,
+      gain: number,
+      decay: number,
+      harmonics: readonly number[],
+    ) => {
+      const start = Math.floor(startSeconds * context.sampleRate);
+      const length = Math.floor(lengthSeconds * context.sampleRate);
       for (let sample = 0; sample < length && start + sample < channel.length; sample += 1) {
         const time = sample / context.sampleRate;
-        const envelope = Math.min(1, time * 42) * Math.exp(-time * 5.2);
-        channel[start + sample] += (
-          Math.sin(2 * Math.PI * frequency * time)
-          + 0.2 * Math.sin(2 * Math.PI * frequency * 2 * time)
-          + 0.07 * Math.sin(2 * Math.PI * frequency * 3 * time)
-        ) * envelope * 0.075;
+        const envelope = Math.min(1, time * 55) * Math.exp(-time * decay);
+        let wave = 0;
+        harmonics.forEach((amount, harmonic) => {
+          wave += amount * Math.sin(2 * Math.PI * frequency * (harmonic + 1) * time);
+        });
+        channel[start + sample] += wave * envelope * gain;
       }
+    };
+
+    melody.forEach((note, index) => {
+      if (note === null) {
+        return;
+      }
+      const swing = index % 2 === 1 ? eighthSeconds * 0.08 : 0;
+      const barAccent = index % (beatsPerBar * 2) === 0 ? 1.18 : 1;
+      addTone(
+        midiToFrequency(note),
+        index * eighthSeconds + swing + 0.018,
+        eighthSeconds * 0.9,
+        0.055 * barAccent,
+        7.8,
+        [1, 0.3, 0.12, 0.04],
+      );
     });
 
-    bass.forEach((frequency, index) => {
-      const start = Math.floor(index * beatSeconds * 4 * context.sampleRate);
-      const length = Math.floor(beatSeconds * 3.4 * context.sampleRate);
-      for (let sample = 0; sample < length && start + sample < channel.length; sample += 1) {
-        const time = sample / context.sampleRate;
-        const envelope = Math.min(1, time * 12) * Math.exp(-time * 1.9);
-        channel[start + sample] += (
-          Math.sin(2 * Math.PI * frequency * time)
-          + 0.12 * Math.sin(2 * Math.PI * frequency * 2 * time)
-        ) * envelope * 0.035;
-      }
+    chordProgression.forEach((chord, bar) => {
+      const intervals = chord.quality === 'major' ? [0, 4, 7] : [0, 3, 7];
+      [0, 2].forEach((beat) => {
+        intervals.forEach((interval, noteIndex) => {
+          addTone(
+            midiToFrequency(chord.root + 12 + interval),
+            (bar * beatsPerBar + beat) * beatSeconds + noteIndex * 0.012,
+            beatSeconds * 1.65,
+            0.012,
+            1.8,
+            [1, 0.16],
+          );
+        });
+      });
+
+      [0, 1, 2, 3].forEach((beat) => {
+        const bassNote = chord.root + (beat % 2 === 0 ? 0 : 7);
+        addTone(
+          midiToFrequency(bassNote),
+          (bar * beatsPerBar + beat) * beatSeconds,
+          beatSeconds * 0.72,
+          0.035,
+          4.1,
+          [1, 0.12],
+        );
+      });
     });
+
+    const totalBeats = chordProgression.length * beatsPerBar;
+    for (let beat = 0; beat < totalBeats; beat += 1) {
+      addTone(beat % 4 === 0 ? 92 : 110, beat * beatSeconds, beatSeconds * 0.32, 0.026, 13, [1]);
+      if (beat % 4 === 1 || beat % 4 === 3) {
+        addTone(1_760, beat * beatSeconds, beatSeconds * 0.18, 0.009, 24, [1, 0.45]);
+      }
+      [0, 1].forEach((half) => {
+        addTone(3_100, (beat + half / 2) * beatSeconds, beatSeconds * 0.08, 0.0045, 34, [1]);
+      });
+    }
     return buffer;
   }
 

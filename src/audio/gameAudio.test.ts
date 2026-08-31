@@ -18,9 +18,23 @@ describe('audio settings', () => {
     });
   });
 
-  it('uses a quick bright default melody instead of long ambient notes', () => {
-    expect(DEFAULT_BGM_PATTERN.beatSeconds).toBeLessThanOrEqual(0.5);
-    expect(DEFAULT_BGM_PATTERN.melody.length).toBeGreaterThanOrEqual(32);
-    expect(Math.max(...DEFAULT_BGM_PATTERN.melody)).toBeGreaterThanOrEqual(1_000);
+  it('uses a structured upbeat tune instead of a repeated rising scale', () => {
+    const pitchedNotes = DEFAULT_BGM_PATTERN.melody.filter(
+      (note): note is NonNullable<typeof note> => note !== null,
+    );
+    const directionChanges = pitchedNotes.slice(2).filter((note, index) => {
+      const previousDirection = Math.sign(pitchedNotes[index + 1] - pitchedNotes[index]);
+      const currentDirection = Math.sign(note - pitchedNotes[index + 1]);
+      return previousDirection !== 0 && currentDirection !== 0 && previousDirection !== currentDirection;
+    }).length;
+
+    expect(DEFAULT_BGM_PATTERN.bpm).toBeGreaterThanOrEqual(140);
+    expect(DEFAULT_BGM_PATTERN.chordProgression).toHaveLength(16);
+    expect(DEFAULT_BGM_PATTERN.melody).toHaveLength(
+      DEFAULT_BGM_PATTERN.chordProgression.length * DEFAULT_BGM_PATTERN.beatsPerBar * 2,
+    );
+    expect(new Set(pitchedNotes).size).toBeGreaterThanOrEqual(10);
+    expect(DEFAULT_BGM_PATTERN.melody.filter((note) => note === null).length).toBeGreaterThanOrEqual(8);
+    expect(directionChanges).toBeGreaterThanOrEqual(24);
   });
 });
