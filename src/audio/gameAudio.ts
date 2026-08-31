@@ -23,35 +23,37 @@ export const BGM_SYNTHESIS_SAMPLE_RATE = 24_000;
 
 export const DEFAULT_BGM_PATTERN = {
   beatsPerBar: 4,
-  bpm: 142,
+  bpm: 134,
   chordProgression: [
-    { quality: 'major', root: 48 }, { quality: 'major', root: 43 },
-    { quality: 'minor', root: 45 }, { quality: 'minor', root: 40 },
-    { quality: 'major', root: 41 }, { quality: 'major', root: 48 },
-    { quality: 'minor', root: 38 }, { quality: 'major', root: 43 },
-    { quality: 'major', root: 48 }, { quality: 'major', root: 43 },
-    { quality: 'minor', root: 45 }, { quality: 'minor', root: 40 },
-    { quality: 'major', root: 41 }, { quality: 'major', root: 43 },
-    { quality: 'major', root: 48 }, { quality: 'major', root: 43 },
+    { quality: 'major', root: 50 }, { quality: 'major', root: 45 },
+    { quality: 'minor', root: 47 }, { quality: 'minor', root: 42 },
+    { quality: 'major', root: 43 }, { quality: 'major', root: 50 },
+    { quality: 'minor', root: 40 }, { quality: 'major', root: 45 },
+    { quality: 'major', root: 43 }, { quality: 'major', root: 45 },
+    { quality: 'minor', root: 42 }, { quality: 'minor', root: 47 },
+    { quality: 'minor', root: 40 }, { quality: 'major', root: 45 },
+    { quality: 'major', root: 50 }, { quality: 'major', root: 45 },
   ],
+  instrument: 'acoustic-piano',
   melody: [
-    72, 76, 79, 79, 81, 79, 76, 72,
-    74, 76, 79, 76, 74, 72, 74, null,
-    76, 76, 81, 81, 79, 76, 74, 72,
-    76, 79, 76, 74, 72, null, 67, 69,
-    72, 74, 76, 79, 81, 79, 76, 74,
-    72, 76, 79, 84, 81, 79, 76, null,
-    74, 74, 77, 81, 79, 77, 74, 72,
-    71, 74, 79, 77, 74, 71, 69, null,
-    79, 81, 84, 84, 81, 79, 76, 79,
-    81, 84, 86, 84, 81, 79, 76, null,
-    76, 81, 84, 81, 79, 76, 74, 72,
-    76, 79, 83, 79, 76, 74, 71, null,
-    77, 81, 84, 81, 79, 77, 76, 74,
-    74, 79, 83, 81, 79, 74, 71, 74,
-    72, 76, 79, 81, 79, 76, 74, 72,
-    74, 71, 67, 69, 71, 72, null, null,
+    74, 78, 81, 78, 76, 74, 69, 71,
+    73, 76, 81, 83, 81, 76, 73, null,
+    74, 78, 81, 83, 86, 83, 81, 78,
+    76, 78, 76, 74, 71, null, 69, 73,
+    74, 76, 78, 81, 83, 81, 78, 76,
+    74, 78, 81, 86, 83, 81, 78, null,
+    76, 76, 79, 83, 81, 79, 76, 74,
+    73, 76, 81, 78, 76, 73, 71, null,
+    81, 83, 86, 83, 81, 78, 76, 78,
+    83, 86, 88, 86, 83, 81, 78, null,
+    78, 83, 86, 83, 81, 78, 76, 74,
+    78, 81, 85, 81, 78, 76, 73, null,
+    79, 83, 86, 83, 81, 79, 78, 76,
+    76, 81, 85, 83, 81, 76, 73, 76,
+    74, 78, 81, 83, 81, 78, 76, 74,
+    76, 73, 69, 71, 73, 74, null, null,
   ],
+  percussion: false,
 } as const;
 
 function midiToFrequency(note: number): number {
@@ -253,24 +255,36 @@ class GameAudio {
     const buffer = context.createBuffer(1, sampleRate * duration, sampleRate);
     const channel = buffer.getChannelData(0);
 
-    const addTone = (
-      frequency: number,
+    const addPianoNote = (
+      midiNote: number,
       startSeconds: number,
       lengthSeconds: number,
       gain: number,
-      decay: number,
-      harmonics: readonly number[],
     ) => {
       const start = Math.floor(startSeconds * sampleRate);
-      const length = Math.floor(lengthSeconds * sampleRate);
+      const releaseSeconds = 0.46;
+      const length = Math.floor((lengthSeconds + releaseSeconds) * sampleRate);
+      const frequency = midiToFrequency(midiNote);
+      const partials = [
+        { decay: 1.15, level: 1, multiple: 1 },
+        { decay: 2.4, level: 0.42, multiple: 2.006 },
+        { decay: 3.4, level: 0.19, multiple: 3.014 },
+        { decay: 4.8, level: 0.08, multiple: 4.028 },
+      ];
       for (let sample = 0; sample < length && start + sample < channel.length; sample += 1) {
         const time = sample / sampleRate;
-        const envelope = Math.min(1, time * 55) * Math.exp(-time * decay);
+        const attack = 1 - Math.exp(-time * 125);
+        const release = time <= lengthSeconds ? 1 : Math.exp(-(time - lengthSeconds) * 8.5);
         let wave = 0;
-        for (let harmonic = 0; harmonic < harmonics.length; harmonic += 1) {
-          wave += harmonics[harmonic] * Math.sin(2 * Math.PI * frequency * (harmonic + 1) * time);
+        for (const partial of partials) {
+          wave += partial.level
+            * Math.exp(-time * partial.decay)
+            * Math.sin(2 * Math.PI * frequency * partial.multiple * time);
         }
-        channel[start + sample] += wave * envelope * gain;
+        const hammer = Math.exp(-time * 38)
+          * Math.sin(2 * Math.PI * frequency * 7.9 * time)
+          * 0.035;
+        channel[start + sample] += (wave + hammer) * attack * release * gain;
       }
     };
 
@@ -278,55 +292,46 @@ class GameAudio {
       if (note === null) {
         return;
       }
-      const swing = index % 2 === 1 ? eighthSeconds * 0.08 : 0;
-      const barAccent = index % (beatsPerBar * 2) === 0 ? 1.18 : 1;
-      addTone(
-        midiToFrequency(note),
-        index * eighthSeconds + swing + 0.018,
-        eighthSeconds * 0.9,
-        0.055 * barAccent,
-        7.8,
-        [1, 0.3, 0.12, 0.04],
+      const phraseAccent = index % (beatsPerBar * 2) === 0 ? 1.12 : 1;
+      addPianoNote(
+        note,
+        index * eighthSeconds + 0.012,
+        eighthSeconds * 0.82,
+        0.064 * phraseAccent,
       );
     });
 
     chordProgression.forEach((chord, bar) => {
-      const intervals = chord.quality === 'major' ? [0, 4, 7] : [0, 3, 7];
-      [0, 2].forEach((beat) => {
-        intervals.forEach((interval, noteIndex) => {
-          addTone(
-            midiToFrequency(chord.root + 12 + interval),
-            (bar * beatsPerBar + beat) * beatSeconds + noteIndex * 0.012,
-            beatSeconds * 1.65,
-            0.012,
-            1.8,
-            [1, 0.16],
-          );
-        });
+      const third = chord.quality === 'major' ? 4 : 3;
+      const arpeggio = [0, 7, 12, third + 12, 19, third + 12, 12, 7];
+      arpeggio.forEach((interval, step) => {
+        addPianoNote(
+          chord.root + interval,
+          bar * beatsPerBar * beatSeconds + step * eighthSeconds,
+          eighthSeconds * 0.76,
+          step === 0 ? 0.028 : 0.021,
+        );
       });
 
-      [0, 1, 2, 3].forEach((beat) => {
-        const bassNote = chord.root + (beat % 2 === 0 ? 0 : 7);
-        addTone(
-          midiToFrequency(bassNote),
+      [0, 2].forEach((beat) => {
+        addPianoNote(
+          chord.root - 12 + (beat === 0 ? 0 : 7),
           (bar * beatsPerBar + beat) * beatSeconds,
-          beatSeconds * 0.72,
-          0.035,
-          4.1,
-          [1, 0.12],
+          beatSeconds * 1.3,
+          0.038,
         );
       });
     });
 
-    const totalBeats = chordProgression.length * beatsPerBar;
-    for (let beat = 0; beat < totalBeats; beat += 1) {
-      addTone(beat % 4 === 0 ? 92 : 110, beat * beatSeconds, beatSeconds * 0.32, 0.026, 13, [1]);
-      if (beat % 4 === 1 || beat % 4 === 3) {
-        addTone(1_760, beat * beatSeconds, beatSeconds * 0.18, 0.009, 24, [1, 0.45]);
+    let peak = 0;
+    for (const sample of channel) {
+      peak = Math.max(peak, Math.abs(sample));
+    }
+    if (peak > 0.86) {
+      const scale = 0.86 / peak;
+      for (let index = 0; index < channel.length; index += 1) {
+        channel[index] *= scale;
       }
-      [0, 1].forEach((half) => {
-        addTone(3_100, (beat + half / 2) * beatSeconds, beatSeconds * 0.08, 0.0045, 34, [1]);
-      });
     }
     return buffer;
   }

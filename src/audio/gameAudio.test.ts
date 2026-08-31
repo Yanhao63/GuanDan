@@ -35,7 +35,7 @@ describe('audio settings', () => {
     });
   });
 
-  it('uses a structured upbeat tune instead of a repeated rising scale', () => {
+  it('uses a structured original piano tune without percussion or a repeated rising scale', () => {
     const pitchedNotes = DEFAULT_BGM_PATTERN.melody.filter(
       (note): note is NonNullable<typeof note> => note !== null,
     );
@@ -45,7 +45,10 @@ describe('audio settings', () => {
       return previousDirection !== 0 && currentDirection !== 0 && previousDirection !== currentDirection;
     }).length;
 
-    expect(DEFAULT_BGM_PATTERN.bpm).toBeGreaterThanOrEqual(140);
+    expect(DEFAULT_BGM_PATTERN.instrument).toBe('acoustic-piano');
+    expect(DEFAULT_BGM_PATTERN.percussion).toBe(false);
+    expect(DEFAULT_BGM_PATTERN.bpm).toBeGreaterThanOrEqual(130);
+    expect(DEFAULT_BGM_PATTERN.bpm).toBeLessThanOrEqual(138);
     expect(BGM_SYNTHESIS_SAMPLE_RATE).toBeLessThanOrEqual(24_000);
     expect(DEFAULT_BGM_PATTERN.chordProgression).toHaveLength(16);
     expect(DEFAULT_BGM_PATTERN.melody).toHaveLength(
