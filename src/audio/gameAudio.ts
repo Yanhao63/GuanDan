@@ -88,10 +88,40 @@ function saveAudioSettings(settings: AudioSettings): void {
   }
 }
 
-function preferredChineseVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | undefined {
-  const chineseVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith('zh'));
-  const preferredNames = /xiaoxiao|xiaoyi|huihui|yaoyao|yunxi|tingting|sin-ji|female|女/i;
-  return chineseVoices.find((voice) => preferredNames.test(voice.name)) ?? chineseVoices[0];
+function chineseVoiceScore(voice: SpeechSynthesisVoice): number {
+  const name = voice.name.toLowerCase();
+  const language = voice.lang.toLowerCase();
+  let score = language === 'zh-cn' || language.startsWith('zh-hans') ? 50 : 20;
+
+  if (/natural|neural|online/.test(name)) score += 90;
+  if (/xiaoxiao|晓晓/.test(name)) score += 150;
+  else if (/xiaoyi|xiaohan|xiaomeng|xiaorui|晓伊|晓涵|晓梦|晓睿/.test(name)) score += 130;
+  else if (/google.*普通话|google.*mandarin/.test(name)) score += 115;
+  else if (/tingting|yaoyao|hanhan|sin-ji|婷婷|瑶瑶|韩韩|female|女/.test(name)) score += 80;
+
+  if (/yunxi|yunyang|yunjian|kangkang|云希|云扬|云健|康康/.test(name)) score -= 90;
+  if (/huihui|慧慧|desktop|legacy/.test(name)) score -= 70;
+  if (voice.default) score += 5;
+  return score;
+}
+
+export function selectPreferredChineseVoice(
+  voices: SpeechSynthesisVoice[],
+): SpeechSynthesisVoice | undefined {
+  return voices
+    .filter((voice) => voice.lang.toLowerCase().startsWith('zh'))
+    .map((voice, index) => ({ index, score: chineseVoiceScore(voice), voice }))
+    .sort((left, right) => right.score - left.score || left.index - right.index)[0]?.voice;
+}
+
+export function getAnnouncementRate(text: string): number {
+  if (/炸/.test(text)) {
+    return 1.3;
+  }
+  if (/木板|三个.+三个|顺子|同花顺|带对/.test(text)) {
+    return 1.22;
+  }
+  return 1.12;
 }
 
 class GameAudio {
@@ -100,7 +130,9 @@ class GameAudio {
   private backgroundGain: GainNode | null = null;
   private backgroundSource: AudioBufferSourceNode | null = null;
   private context: AudioContext | null = null;
+  private preferredVoice: SpeechSynthesisVoice | null = null;
   private settings: AudioSettings = DEFAULT_AUDIO_SETTINGS;
+  private voiceListenerAttached = false;
 
   configure(settings: AudioSettings): void {
     this.settings = normalizeAudioSettings(settings);
@@ -133,6 +165,7 @@ class GameAudio {
     if (this.context.state === 'suspended') {
       await this.context.resume();
     }
+    this.preparePreferredVoice();
     this.startBackground();
   }
 
@@ -183,14 +216,28 @@ class GameAudio {
       return;
     }
 
+    this.preparePreferredVoice();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'zh-CN';
-    utterance.rate = 1.02;
-    utterance.pitch = 1.08;
+    utterance.lang = this.preferredVoice?.lang ?? 'zh-CN';
+    utterance.rate = getAnnouncementRate(text);
+    utterance.pitch = 1.02;
     utterance.volume = this.settings.voice / 100;
-    utterance.voice = preferredChineseVoice(window.speechSynthesis.getVoices()) ?? null;
+    utterance.voice = this.preferredVoice;
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
+  }
+
+  private preparePreferredVoice(): void {
+    if (!('speechSynthesis' in window)) {
+      return;
+    }
+    this.preferredVoice = selectPreferredChineseVoice(window.speechSynthesis.getVoices()) ?? null;
+    if (!this.voiceListenerAttached) {
+      window.speechSynthesis.addEventListener('voiceschanged', () => {
+        this.preferredVoice = selectPreferredChineseVoice(window.speechSynthesis.getVoices()) ?? null;
+      });
+      this.voiceListenerAttached = true;
+    }
   }
 
   private createBackgroundBuffer(): AudioBuffer {

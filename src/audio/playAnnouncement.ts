@@ -9,6 +9,15 @@ const suitNames: Partial<Record<Suit, string>> = {
 };
 
 const spokenRanks: Record<string, string> = {
+  '2': '二',
+  '3': '三',
+  '4': '四',
+  '5': '五',
+  '6': '六',
+  '7': '七',
+  '8': '八',
+  '9': '九',
+  '10': '十',
   A: '尖',
   J: '勾',
   Q: '圈',
@@ -20,7 +29,7 @@ function speakRank(rank: string): string {
 }
 
 function speakSequence(label: string): string {
-  return label.split('-').map(speakRank).join('、');
+  return label.split('-').map(speakRank).join(' ');
 }
 
 function getStraightFlushSuit(event: RoomPlayEvent): string {
@@ -67,7 +76,7 @@ export function describePlayForSpeech(event: RoomPlayEvent): string {
 
   const bomb = /^(\d+)\s*张(.+?)炸弹$/.exec(description);
   if (bomb !== null) {
-    return `${bomb[1]}张${speakRank(bomb[2])}炸炸炸`;
+    return `${speakRank(bomb[1])}张${speakRank(bomb[2])}炸炸炸`;
   }
 
   const single = /^单张\s+(.+)$/.exec(description);

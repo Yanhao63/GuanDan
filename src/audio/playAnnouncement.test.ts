@@ -14,12 +14,12 @@ describe('play voice announcements', () => {
     ['单张 A', '一张尖'],
     ['K对子', '一对K'],
     ['Q三张', '三张圈'],
-    ['三张 J 带 9 对', '三张勾带对9'],
-    ['三连对 6-7-8', '木板6、7、8'],
-    ['三连对 J-Q-K', '木板勾、圈、K'],
-    ['钢板 8-9', '三个8三个9'],
-    ['顺子 10-J-Q-K-A', '顺子10、勾、圈、K、尖'],
-    ['6 张Q炸弹', '6张圈炸炸炸'],
+    ['三张 J 带 9 对', '三张勾带对九'],
+    ['三连对 6-7-8', '木板六 七 八'],
+    ['三连对 J-Q-K', '木板勾 圈 K'],
+    ['钢板 8-9', '三个八三个九'],
+    ['顺子 10-J-Q-K-A', '顺子十 勾 圈 K 尖'],
+    ['6 张Q炸弹', '六张圈炸炸炸'],
     ['不要', '不要'],
     ['四王炸', '四王炸'],
   ])('turns %s into %s', (description, announcement) => {
@@ -33,6 +33,6 @@ describe('play voice announcements', () => {
       { deck: 1, id: 'spade-queen', rank: 'Q', suit: 'spades' },
       { deck: 1, id: 'wild-five', rank: '5', suit: 'hearts' },
       { deck: 2, id: 'wild-five-two', rank: '5', suit: 'hearts' },
-    ]))).toBe('黑桃10、勾、圈、K、尖同花顺');
+    ]))).toBe('黑桃十 勾 圈 K 尖同花顺');
   });
 });
