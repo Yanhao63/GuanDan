@@ -1,6 +1,7 @@
 import type { TimerChoice } from '../types';
 
 export const DISCONNECT_GRACE_MS = 120_000;
+export const TURN_TRANSITION_DELAY_MS = 1_500;
 
 export type TimeoutAction = 'pass' | 'play-smallest-single';
 export type DisconnectDecision =

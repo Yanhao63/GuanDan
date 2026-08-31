@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_AUDIO_SETTINGS,
+  BGM_SYNTHESIS_SAMPLE_RATE,
   DEFAULT_BGM_PATTERN,
   getAnnouncementRate,
   normalizeAudioSettings,
@@ -45,6 +46,7 @@ describe('audio settings', () => {
     }).length;
 
     expect(DEFAULT_BGM_PATTERN.bpm).toBeGreaterThanOrEqual(140);
+    expect(BGM_SYNTHESIS_SAMPLE_RATE).toBeLessThanOrEqual(24_000);
     expect(DEFAULT_BGM_PATTERN.chordProgression).toHaveLength(16);
     expect(DEFAULT_BGM_PATTERN.melody).toHaveLength(
       DEFAULT_BGM_PATTERN.chordProgression.length * DEFAULT_BGM_PATTERN.beatsPerBar * 2,

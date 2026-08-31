@@ -11,6 +11,7 @@ import { getRankStrength } from './rules/ranks';
 import { createTrickState, submitPass, submitPlay, type TrickState } from './rules/trick';
 import {
   DISCONNECT_GRACE_MS,
+  TURN_TRANSITION_DELAY_MS,
   getPublicCardCount,
   getTurnDurationMs,
 } from './rules/timing';
@@ -145,7 +146,7 @@ export type DisconnectEvent =
   | { from: Seat; to: Seat; type: 'host-transfer' };
 
 export const BOT_ACTION_DELAY_MS = 2_500;
-export const TURN_TRANSITION_DELAY_MS = 1_500;
+export { TURN_TRANSITION_DELAY_MS } from './rules/timing';
 export const SINGLE_TRIBUTE_REVEAL_MS = 6_000;
 export const DOUBLE_TRIBUTE_REVEAL_MS = 6_000;
 

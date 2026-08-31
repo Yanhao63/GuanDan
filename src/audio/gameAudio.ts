@@ -19,6 +19,7 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
 };
 
 const STORAGE_KEY = 'guandan-audio-settings';
+export const BGM_SYNTHESIS_SAMPLE_RATE = 24_000;
 
 export const DEFAULT_BGM_PATTERN = {
   beatsPerBar: 4,
@@ -127,8 +128,10 @@ export function getAnnouncementRate(text: string): number {
 class GameAudio {
   private assets: AudioAssetManifest = {};
   private backgroundElement: HTMLAudioElement | null = null;
+  private backgroundBuffer: AudioBuffer | null = null;
   private backgroundGain: GainNode | null = null;
   private backgroundSource: AudioBufferSourceNode | null = null;
+  private backgroundStartQueued = false;
   private context: AudioContext | null = null;
   private preferredVoice: SpeechSynthesisVoice | null = null;
   private settings: AudioSettings = DEFAULT_AUDIO_SETTINGS;
@@ -146,7 +149,7 @@ class GameAudio {
     if (this.settings.bgm === 0) {
       this.stopBackground();
     } else if (this.context?.state === 'running') {
-      this.startBackground();
+      this.queueBackgroundStart();
     }
   }
 
@@ -154,7 +157,7 @@ class GameAudio {
     this.stopBackground();
     this.assets = assets;
     if (this.context?.state === 'running') {
-      this.startBackground();
+      this.queueBackgroundStart();
     }
   }
 
@@ -166,7 +169,7 @@ class GameAudio {
       await this.context.resume();
     }
     this.preparePreferredVoice();
-    this.startBackground();
+    this.queueBackgroundStart();
   }
 
   playEffect(effect: SoundEffect): void {
@@ -246,7 +249,8 @@ class GameAudio {
     const beatSeconds = 60 / bpm;
     const eighthSeconds = beatSeconds / 2;
     const duration = chordProgression.length * beatsPerBar * beatSeconds;
-    const buffer = context.createBuffer(1, context.sampleRate * duration, context.sampleRate);
+    const sampleRate = Math.min(context.sampleRate, BGM_SYNTHESIS_SAMPLE_RATE);
+    const buffer = context.createBuffer(1, sampleRate * duration, sampleRate);
     const channel = buffer.getChannelData(0);
 
     const addTone = (
@@ -257,15 +261,15 @@ class GameAudio {
       decay: number,
       harmonics: readonly number[],
     ) => {
-      const start = Math.floor(startSeconds * context.sampleRate);
-      const length = Math.floor(lengthSeconds * context.sampleRate);
+      const start = Math.floor(startSeconds * sampleRate);
+      const length = Math.floor(lengthSeconds * sampleRate);
       for (let sample = 0; sample < length && start + sample < channel.length; sample += 1) {
-        const time = sample / context.sampleRate;
+        const time = sample / sampleRate;
         const envelope = Math.min(1, time * 55) * Math.exp(-time * decay);
         let wave = 0;
-        harmonics.forEach((amount, harmonic) => {
-          wave += amount * Math.sin(2 * Math.PI * frequency * (harmonic + 1) * time);
-        });
+        for (let harmonic = 0; harmonic < harmonics.length; harmonic += 1) {
+          wave += harmonics[harmonic] * Math.sin(2 * Math.PI * frequency * (harmonic + 1) * time);
+        }
         channel[start + sample] += wave * envelope * gain;
       }
     };
@@ -327,6 +331,17 @@ class GameAudio {
     return buffer;
   }
 
+  private queueBackgroundStart(): void {
+    if (this.backgroundStartQueued) {
+      return;
+    }
+    this.backgroundStartQueued = true;
+    window.setTimeout(() => {
+      this.backgroundStartQueued = false;
+      this.startBackground();
+    }, 0);
+  }
+
   private playMedia(source: string, volume: number): void {
     const media = new Audio(source);
     media.volume = volume / 100;
@@ -352,7 +367,8 @@ class GameAudio {
     this.backgroundGain.gain.value = this.settings.bgm / 100;
     this.backgroundGain.connect(this.context.destination);
     this.backgroundSource = this.context.createBufferSource();
-    this.backgroundSource.buffer = this.createBackgroundBuffer();
+    this.backgroundBuffer ??= this.createBackgroundBuffer();
+    this.backgroundSource.buffer = this.backgroundBuffer;
     this.backgroundSource.loop = true;
     this.backgroundSource.connect(this.backgroundGain);
     this.backgroundSource.start();

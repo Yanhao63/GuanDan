@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import type { NetworkPlayEvent } from '../game/network';
 import type { RoomPlayEvent } from '../game/room';
 import type { Seat } from '../game/rules/match';
+import { TURN_TRANSITION_DELAY_MS } from '../game/rules/timing';
 import type { PlainRank } from '../game/rules/types';
 import { PokerCard } from './PokerCard';
 
@@ -80,7 +81,7 @@ export function DirectionalPlay({
     if (activeEvent === null) {
       return undefined;
     }
-    const timeout = window.setTimeout(onAnimationComplete, 600);
+    const timeout = window.setTimeout(onAnimationComplete, TURN_TRANSITION_DELAY_MS);
     return () => window.clearTimeout(timeout);
   }, [activeEvent, onAnimationComplete]);
 
