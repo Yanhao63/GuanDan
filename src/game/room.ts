@@ -60,6 +60,7 @@ export interface RoomSnapshot {
   trick: TrickState | null;
   settlement?: DealSettlement | null;
   turnDeadline?: number | null;
+  turnTransitionDeadline?: number | null;
   tribute?: TributeRoundState | null;
   tributeRevealDeadline?: number | null;
 }
@@ -121,6 +122,7 @@ export interface RoomView {
   settlement: DealSettlement | null;
   timer: TimerChoice;
   turnDeadline: number | null;
+  turnTransitionDeadline: number | null;
   tribute: TributeView | null;
 }
 
@@ -143,6 +145,7 @@ export type DisconnectEvent =
   | { from: Seat; to: Seat; type: 'host-transfer' };
 
 export const BOT_ACTION_DELAY_MS = 2_500;
+export const TURN_TRANSITION_DELAY_MS = 1_500;
 export const SINGLE_TRIBUTE_REVEAL_MS = 6_000;
 export const DOUBLE_TRIBUTE_REVEAL_MS = 6_000;
 
@@ -183,6 +186,7 @@ export class RoomEngine {
   private timer: TimerChoice = '不限时';
   private trick: TrickState | null = null;
   private turnDeadline: number | null = null;
+  private turnTransitionDeadline: number | null = null;
   private tribute: TributeRoundState | null = null;
   private tributeRevealDeadline: number | null = null;
 
@@ -219,6 +223,7 @@ export class RoomEngine {
     room.timer = snapshot.timer;
     room.trick = structuredClone(snapshot.trick);
     room.turnDeadline = snapshot.turnDeadline ?? null;
+    room.turnTransitionDeadline = snapshot.turnTransitionDeadline ?? null;
     room.tribute = structuredClone(snapshot.tribute ?? null);
     room.tributeRevealDeadline = snapshot.tributeRevealDeadline ?? null;
     if (snapshot.turnDeadline === undefined) {
@@ -421,6 +426,7 @@ export class RoomEngine {
     this.settlement = null;
     this.tribute = null;
     this.tributeRevealDeadline = null;
+    this.turnTransitionDeadline = null;
     this.phase = 'playing';
     this.beginDealHistory();
     this.refreshAutomationDeadlines(now);
@@ -446,6 +452,7 @@ export class RoomEngine {
     this.settlement = null;
     this.tribute = beginTributeRound(finishOrder, hands, this.level);
     this.tributeRevealDeadline = null;
+    this.turnTransitionDeadline = null;
     this.phase = 'tribute';
     this.beginDealHistory();
     this.finishTributeIfReady(now);
@@ -513,6 +520,7 @@ export class RoomEngine {
     if (this.getPause() !== null) {
       throw new Error('牌局正在等待掉线玩家重连');
     }
+    this.requireTurnTransitionComplete();
     const member = this.getMember(sessionId);
     this.requireUnexpiredTurn(member, now);
     if (new Set(cardIds).size !== cardIds.length) {
@@ -548,6 +556,7 @@ export class RoomEngine {
       this.settlement = settlement;
       this.tribute = null;
       this.tributeRevealDeadline = null;
+      this.turnTransitionDeadline = null;
       this.phase = 'complete';
     }
     const event: RoomPlayEvent = {
@@ -556,6 +565,7 @@ export class RoomEngine {
       player: member.seat,
     };
     this.recordHistory('play', event);
+    this.beginTurnTransition(now);
     this.refreshAutomationDeadlines(now);
     return event;
   }
@@ -567,6 +577,7 @@ export class RoomEngine {
     if (this.getPause() !== null) {
       throw new Error('牌局正在等待掉线玩家重连');
     }
+    this.requireTurnTransitionComplete();
     const member = this.getMember(sessionId);
     this.requireUnexpiredTurn(member, now);
     this.trick = submitPass(this.trick, member.seat).state;
@@ -576,6 +587,7 @@ export class RoomEngine {
       player: member.seat,
     };
     this.recordHistory('pass', event);
+    this.beginTurnTransition(now);
     this.refreshAutomationDeadlines(now);
     return event;
   }
@@ -628,7 +640,7 @@ export class RoomEngine {
   getView(sessionId: string): RoomView {
     const self = this.getMember(sessionId);
     return {
-      currentSeat: this.trick?.currentSeat ?? null,
+      currentSeat: this.turnTransitionDeadline === null ? this.trick?.currentSeat ?? null : null,
       dealNumber: this.dealNumber,
       finishOrder: [...(this.trick?.finishOrder ?? [])],
       hand: [...self.hand],
@@ -658,6 +670,7 @@ export class RoomEngine {
       settlement: structuredClone(this.settlement),
       timer: this.timer,
       turnDeadline: this.turnDeadline,
+      turnTransitionDeadline: this.turnTransitionDeadline,
       tribute: this.getTributeView(self),
     };
   }
@@ -681,6 +694,7 @@ export class RoomEngine {
       timer: this.timer,
       trick: structuredClone(this.trick),
       turnDeadline: this.turnDeadline,
+      turnTransitionDeadline: this.turnTransitionDeadline,
       tribute: structuredClone(this.tribute),
       tributeRevealDeadline: this.tributeRevealDeadline,
     };
@@ -765,6 +779,10 @@ export class RoomEngine {
     return this.getPause() === null ? this.turnDeadline : null;
   }
 
+  getNextTurnTransitionDeadline(): number | null {
+    return this.turnTransitionDeadline;
+  }
+
   getNextBotActionDeadline(): number | null {
     return this.getPause() === null ? this.botActionDeadline : null;
   }
@@ -785,6 +803,15 @@ export class RoomEngine {
     }
     this.tribute = finishTributeReveal(this.tribute);
     this.tributeRevealDeadline = null;
+    this.refreshAutomationDeadlines(now);
+    return true;
+  }
+
+  applyTurnTransitionTimeout(now = Date.now()): boolean {
+    if (this.turnTransitionDeadline === null || now < this.turnTransitionDeadline) {
+      return false;
+    }
+    this.turnTransitionDeadline = null;
     this.refreshAutomationDeadlines(now);
     return true;
   }
@@ -966,7 +993,7 @@ export class RoomEngine {
   }
 
   private refreshBotActionDeadline(now = Date.now()): void {
-    if (!this.hasPendingBotAction()) {
+    if (this.turnTransitionDeadline !== null || !this.hasPendingBotAction()) {
       this.botActionDeadline = null;
       return;
     }
@@ -998,6 +1025,7 @@ export class RoomEngine {
       || this.trick === null
       || this.trick.currentSeat === null
       || this.getPause() !== null
+      || this.turnTransitionDeadline !== null
     ) {
       this.turnDeadline = null;
       return;
@@ -1020,6 +1048,18 @@ export class RoomEngine {
       && now >= this.turnDeadline
     ) {
       throw new Error('当前回合已经超时');
+    }
+  }
+
+  private beginTurnTransition(now: number): void {
+    this.turnTransitionDeadline = this.phase === 'playing' && this.trick?.currentSeat !== null
+      ? now + TURN_TRANSITION_DELAY_MS
+      : null;
+  }
+
+  private requireTurnTransitionComplete(): void {
+    if (this.turnTransitionDeadline !== null) {
+      throw new Error('正在展示上一手牌，请稍候');
     }
   }
 

@@ -4,6 +4,7 @@ import {
   DOUBLE_TRIBUTE_REVEAL_MS,
   RoomEngine,
   SINGLE_TRIBUTE_REVEAL_MS,
+  TURN_TRANSITION_DELAY_MS,
   getTributeRevealDurationMs,
 } from './room';
 import { getRankStrength } from './rules/ranks';
@@ -107,14 +108,29 @@ describe('authoritative room engine', () => {
       cards: [expectedSmallest],
       player: 0,
     });
-    expect(afterOpeningTimeout.currentSeat).toBe(1);
-    expect(afterOpeningTimeout.turnDeadline).toBe(61_000);
+    expect(afterOpeningTimeout.currentSeat).toBeNull();
+    expect(afterOpeningTimeout.turnDeadline).toBeNull();
+    expect(room.getNextTurnTransitionDeadline()).toBe(31_000 + TURN_TRANSITION_DELAY_MS);
+    expect(() => room.pass(receipts[1].sessionId, 31_500)).toThrow(/展示上一手牌/);
+    expect(room.applyTurnTransitionTimeout(32_499)).toBe(false);
+    expect(room.applyTurnTransitionTimeout(32_500)).toBe(true);
+    expect(room.getView(receipts[0].sessionId)).toMatchObject({
+      currentSeat: 1,
+      turnDeadline: 62_500,
+      turnTransitionDeadline: null,
+    });
 
-    expect(room.applyTurnTimeout(61_000)).toBe(true);
+    expect(room.applyTurnTimeout(62_500)).toBe(true);
+    expect(room.getView(receipts[1].sessionId)).toMatchObject({
+      currentSeat: null,
+      turnDeadline: null,
+      turnTransitionDeadline: 64_000,
+    });
+    expect(room.applyTurnTransitionTimeout(64_000)).toBe(true);
     const afterFollowTimeout = room.getView(receipts[1].sessionId);
     expect(afterFollowTimeout.hand).toHaveLength(27);
     expect(afterFollowTimeout.currentSeat).toBe(2);
-    expect(afterFollowTimeout.turnDeadline).toBe(91_000);
+    expect(afterFollowTimeout.turnDeadline).toBe(94_000);
   });
 
   it('stops the turn clock while paused and restarts it after reconnection', () => {
@@ -207,7 +223,7 @@ describe('authoritative room engine', () => {
     expect(after).toEqual(before);
   });
 
-  it('paces consecutive bot turns 2.5 seconds apart until a human must act', () => {
+  it('keeps a 1.5 second result pause before each paced bot turn', () => {
     const room = new RoomEngine('123456', seededRandom(12), tokenSource());
     const host = room.joinHuman('房主');
     room.addBot(host.sessionId, 1);
@@ -225,9 +241,16 @@ describe('authoritative room engine', () => {
       if (botTurns > 100) {
         throw new Error('机器人回合未能停止');
       }
+      const transitionDeadline = room.getNextTurnTransitionDeadline();
+      if (transitionDeadline !== null) {
+        expect(transitionDeadline).toBe(deadline + TURN_TRANSITION_DELAY_MS);
+        expect(room.getNextBotActionDeadline()).toBeNull();
+        expect(room.applyTurnTransitionTimeout(transitionDeadline - 1)).toBe(false);
+        expect(room.applyTurnTransitionTimeout(transitionDeadline)).toBe(true);
+      }
       const nextDeadline = room.getNextBotActionDeadline();
       if (nextDeadline !== null) {
-        expect(nextDeadline).toBe(deadline + BOT_ACTION_DELAY_MS);
+        expect(nextDeadline).toBe(deadline + TURN_TRANSITION_DELAY_MS + BOT_ACTION_DELAY_MS);
       }
       deadline = nextDeadline;
     }
@@ -250,7 +273,10 @@ describe('authoritative room engine', () => {
     room.play(leader.sessionId, [openingCard.id], undefined, 1_000);
 
     const passerSeat = ((leaderSeat + 1) % 4) as 0 | 1 | 2 | 3;
-    room.pass(receipts[passerSeat].sessionId, 1_100);
+    expect(room.getView(receipts[passerSeat].sessionId).currentSeat).toBeNull();
+    expect(() => room.pass(receipts[passerSeat].sessionId, 2_499)).toThrow(/展示上一手牌/);
+    expect(room.applyTurnTransitionTimeout(2_500)).toBe(true);
+    room.pass(receipts[passerSeat].sessionId, 2_600);
 
     expect(room.getView(receipts[0].sessionId).history).toEqual([{
       dealNumber: 1,

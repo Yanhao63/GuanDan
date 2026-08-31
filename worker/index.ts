@@ -87,6 +87,7 @@ export class GameRoom extends DurableObject<Env> {
       this.room?.getNextDisconnectDeadline() ?? null,
       this.room?.getNextTributeRevealDeadline() ?? null,
       this.room?.getNextTurnDeadline() ?? null,
+      this.room?.getNextTurnTransitionDeadline() ?? null,
     ].filter((deadline): deadline is number => deadline !== null);
     if (deadlines.length === 0) {
       await this.ctx.storage.deleteAlarm();
@@ -286,6 +287,7 @@ export class GameRoom extends DurableObject<Env> {
     const now = Date.now();
     this.room.applyDisconnectTimeouts(now);
     this.room.applyTributeRevealTimeout(now);
+    this.room.applyTurnTransitionTimeout(now);
     this.room.applyTurnTimeout(now, (event) => this.broadcastPlayEvent(event));
     this.room.runCurrentBotTurn(now, (event) => this.broadcastPlayEvent(event));
     await this.persist();
